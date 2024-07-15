@@ -1,7 +1,7 @@
 CREATE TABLE People (
     id SERIAL PRIMARY KEY,
-    passportSerie VARCHAR(10) NOT NULL,
-    passportNumber VARCHAR(10) NOT NULL,
+    passportSerie INTEGER NOT NULL,
+    passportNumber INTEGER NOT NULL,
     surname VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     patronymic VARCHAR(255),

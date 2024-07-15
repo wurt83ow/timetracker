@@ -2,7 +2,7 @@ package storage
 
 import (
 	"errors"
-	"sync"
+	"fmt"
 
 	"github.com/wurt83ow/timetracker/internal/models"
 	"go.uber.org/zap"
@@ -24,8 +24,8 @@ type Log interface {
 }
 
 type MemoryStorage struct {
-	omx    sync.RWMutex
-	umx    sync.RWMutex
+	// omx    sync.RWMutex
+	// umx    sync.RWMutex
 	users  StorageUsers
 	keeper Keeper
 	log    Log
@@ -33,7 +33,8 @@ type MemoryStorage struct {
 
 type Keeper interface {
 	LoadUsers() (StorageUsers, error)
-	SaveUser(string, models.People) (models.People, error)
+	// SaveUser(string, models.People) (models.People, error)
+	SaveUser(string, models.People) error
 	Ping() bool
 	Close() bool
 }
@@ -58,41 +59,58 @@ func NewMemoryStorage(keeper Keeper, log Log) *MemoryStorage {
 	}
 }
 
-func (s *MemoryStorage) GetUser(k string) (models.People, error) {
-	s.umx.RLock()
-	defer s.umx.RUnlock()
-
-	v, exists := s.users[k]
-	if !exists {
-		return models.People{}, errors.New("value with such key doesn't exist")
+func (s *MemoryStorage) InsertPerson(person models.People) error {
+	key := fmt.Sprintf("%d %d", person.PassportSerie, person.PassportNumber)
+	if _, exists := s.users[key]; exists {
+		return ErrConflict
 	}
 
-	return v, nil
-}
-
-func (s *MemoryStorage) InsertUser(k string,
-	v models.People,
-) (models.People, error) {
-	nv, err := s.SaveUser(k, v)
-	if err != nil {
-		return nv, err
+	// Save the user to the keeper
+	if err := s.keeper.SaveUser(key, person); err != nil {
+		return err
 	}
 
-	s.umx.Lock()
-	defer s.umx.Unlock()
+	// Also save to the in-memory map
+	s.users[key] = person
 
-	s.users[k] = nv
-
-	return nv, nil
+	return nil
 }
 
-func (s *MemoryStorage) SaveUser(k string, v models.People) (models.People, error) {
-	if s.keeper == nil {
-		return v, nil
-	}
+// func (s *MemoryStorage) GetUser(k string) (models.People, error) {
+// 	s.umx.RLock()
+// 	defer s.umx.RUnlock()
 
-	return s.keeper.SaveUser(k, v)
-}
+// 	v, exists := s.users[k]
+// 	if !exists {
+// 		return models.People{}, errors.New("value with such key doesn't exist")
+// 	}
+
+// 	return v, nil
+// }
+
+// func (s *MemoryStorage) InsertUser(k string,
+// 	v models.People,
+// ) (models.People, error) {
+// 	nv, err := s.SaveUser(k, v)
+// 	if err != nil {
+// 		return nv, err
+// 	}
+
+// 	s.umx.Lock()
+// 	defer s.umx.Unlock()
+
+// 	s.users[k] = nv
+
+// 	return nv, nil
+// }
+
+// func (s *MemoryStorage) SaveUser(k string, v models.People) (models.People, error) {
+// 	if s.keeper == nil {
+// 		return v, nil
+// 	}
+
+// 	return s.keeper.SaveUser(k, v)
+// }
 
 func (s *MemoryStorage) GetBaseConnection() bool {
 	if s.keeper == nil {
