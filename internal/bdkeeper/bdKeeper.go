@@ -181,6 +181,110 @@ func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 	return data, nil
 }
 
+func (kp *BDKeeper) DeleteUser(passportSerie, passportNumber int) error {
+	ctx := context.Background()
+
+	query := `
+		DELETE FROM People
+		WHERE passportSerie = $1 AND passportNumber = $2
+	`
+
+	_, err := kp.conn.ExecContext(ctx, query, passportSerie, passportNumber)
+	if err != nil {
+		kp.log.Info("error deleting user from database: ", zap.Error(err))
+		return err
+	}
+
+	kp.log.Info("User deleted successfully", zap.Int("passportSerie", passportSerie), zap.Int("passportNumber", passportNumber))
+	return nil
+}
+
+func (bd *BDKeeper) SaveTask(task models.Task) error {
+	query := `
+		INSERT INTO tasks (
+			name, description, created_at
+		) VALUES (
+			$1, $2, $3
+		)
+	`
+
+	_, err := bd.conn.Exec(
+		query,
+		task.Name,
+		task.Description,
+		task.CreatedAt,
+	)
+	if err != nil {
+		bd.log.Info("error saving task to database: ", zap.Error(err))
+		return err
+	}
+
+	bd.log.Info("Task saved successfully: ", zap.String("name", task.Name))
+	return nil
+}
+
+func (kp *BDKeeper) LoadTasks() (storage.StorageTasks, error) {
+	ctx := context.Background()
+
+	sql := `
+	SELECT
+		id,
+		name,
+		description,
+		created_at
+	FROM
+		tasks`
+
+	rows, err := kp.conn.QueryContext(ctx, sql)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tasks: %w", err)
+	}
+
+	defer rows.Close()
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to load tasks: %w", err)
+	}
+
+	data := make(storage.StorageTasks)
+
+	for rows.Next() {
+		var t models.Task
+
+		err := rows.Scan(
+			&t.ID,
+			&t.Name,
+			&t.Description,
+			&t.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load tasks: %w", err)
+		}
+
+		data[t.ID] = t
+	}
+
+	return data, nil
+}
+
+func (kp *BDKeeper) DeleteTask(id int) error {
+	ctx := context.Background()
+
+	query := `
+		DELETE FROM tasks
+		WHERE id = $1
+	`
+
+	_, err := kp.conn.ExecContext(ctx, query, id)
+	if err != nil {
+		kp.log.Info("error deleting task from database: ", zap.Error(err))
+		return err
+	}
+
+	kp.log.Info("Task deleted successfully", zap.Int("id", id))
+	return nil
+}
+
 // func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 // 	ctx := context.Background()
 

@@ -64,3 +64,31 @@ type UserTimeReport struct {
 	Task       string  `json:"task"`
 	TotalHours float64 `json:"total_hours"`
 }
+
+type Filter struct {
+	PassportSerie  *int
+	PassportNumber *int
+	Surname        *string
+	Name           *string
+	Patronymic     *string
+	Address        *string
+	Timezone       *string
+	Email          *string
+}
+
+type Pagination struct {
+	Offset int `json:"offset"`
+	Limit  int `json:"limit"`
+}
+
+type Task struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type TaskFilter struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+}

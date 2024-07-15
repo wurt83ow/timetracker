@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	authz "github.com/wurt83ow/timetracker/internal/authorization"
 	"github.com/wurt83ow/timetracker/internal/models"
+	"github.com/wurt83ow/timetracker/internal/storage"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -22,10 +23,16 @@ type IExternalClient interface {
 }
 
 type Storage interface {
-	// InsertUser(string, models.People) (models.People, error)
-	// GetUser(string) (models.People, error)
 	GetBaseConnection() bool
 	InsertPerson(models.People) error
+	UpdatePerson(models.People) error
+	DeletePerson(int, int) error
+	GetPersons(models.Filter, models.Pagination) ([]models.People, error)
+
+	InsertTask(models.Task) error
+	UpdateTask(models.Task) error
+	DeleteTask(int) error
+	GetTasks(models.TaskFilter, models.Pagination) ([]models.Task, error)
 }
 
 type Options interface {
@@ -69,6 +76,8 @@ func (h *BaseController) Route() *chi.Mux {
 	// r.Post("/api/user/login", h.Login)
 	r.Get("/ping", h.GetPing)
 	r.Post("/api/person", h.AddPerson)
+	r.Put("/api/person", h.UpdatePerson)
+	r.Delete("/api/person", h.DeletePerson)
 
 	// group where the middleware authorization is needed
 	r.Group(func(r chi.Router) {
@@ -231,14 +240,7 @@ func (h *BaseController) AddPerson(w http.ResponseWriter, r *http.Request) {
 		UUID:           uuid.New().String(),
 		PassportSerie:  passportSerie,
 		PassportNumber: passportNumber,
-		Surname:        "", // placeholder, should be filled with real data
-		Name:           "", // placeholder, should be filled with real data
-		Patronymic:     "", // placeholder, should be filled with real data
-		Address:        "", // placeholder, should be filled with real data
 		DefaultEndTime: time.Now(),
-		Timezone:       "",  // placeholder, should be filled with real data
-		Email:          "",  // placeholder, should be filled with real data
-		Hash:           nil, // placeholder, should be filled with real data
 		LastCheckedAt:  time.Now(),
 	}
 
@@ -250,6 +252,332 @@ func (h *BaseController) AddPerson(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	h.log.Info("Person added successfully")
+}
+
+// @Summary Update person
+// @Description Update a person in the database
+// @Tags People
+// @Accept json
+// @Produce json
+// @Param person body models.People true "Person Info"
+// @Success 200 {string} string "Person updated successfully"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 404 {string} string "Not Found"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/person [put]
+func (h *BaseController) UpdatePerson(w http.ResponseWriter, r *http.Request) {
+	var person models.People
+	if err := json.NewDecoder(r.Body).Decode(&person); err != nil {
+		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err := h.storage.UpdatePerson(person); err == storage.ErrNotFound {
+		h.log.Info("user not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	} else if err != nil {
+		h.log.Info("error updating person in storage: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	h.log.Info("Person updated successfully")
+}
+
+// @Summary Delete person
+// @Description Delete a person from the database
+// @Tags People
+// @Accept json
+// @Produce json
+// @Param passportSerie query int true "Passport Series"
+// @Param passportNumber query int true "Passport Number"
+// @Success 200 {string} string "Person deleted successfully"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 404 {string} string "Not Found"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/person [delete]
+func (h *BaseController) DeletePerson(w http.ResponseWriter, r *http.Request) {
+	passportSerieStr := r.URL.Query().Get("passportSerie")
+	passportNumberStr := r.URL.Query().Get("passportNumber")
+
+	passportSerie, err := strconv.Atoi(passportSerieStr)
+	if err != nil {
+		h.log.Info("invalid passport series format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	passportNumber, err := strconv.Atoi(passportNumberStr)
+	if err != nil {
+		h.log.Info("invalid passport number format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	err = h.storage.DeletePerson(passportSerie, passportNumber)
+	if err == storage.ErrNotFound {
+		h.log.Info("user not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	} else if err != nil {
+		h.log.Info("error deleting person from storage: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	h.log.Info("Person deleted successfully")
+}
+
+// @Summary Get users
+// @Description Get users from the database
+// @Tags People
+// @Accept json
+// @Produce json
+// @Param passportSerie query int false "Passport Series"
+// @Param passportNumber query int false "Passport Number"
+// @Param surname query string false "Surname"
+// @Param name query string false "Name"
+// @Param patronymic query string false "Patronymic"
+// @Param address query string false "Address"
+// @Param timezone query string false "Timezone"
+// @Param email query string false "Email"
+// @Param limit query int false "Limit"
+// @Param offset query int false "Offset"
+// @Success 200 {array} models.People "List of users"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/persons [get]
+func (h *BaseController) GetPersons(w http.ResponseWriter, r *http.Request) {
+	var filter models.Filter
+	var pagination models.Pagination
+
+	if v := r.URL.Query().Get("passportSerie"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			h.log.Info("invalid passport series format")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		filter.PassportSerie = &val
+	}
+	if v := r.URL.Query().Get("passportNumber"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			h.log.Info("invalid passport number format")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		filter.PassportNumber = &val
+	}
+	if v := r.URL.Query().Get("surname"); v != "" {
+		filter.Surname = &v
+	}
+	if v := r.URL.Query().Get("name"); v != "" {
+		filter.Name = &v
+	}
+	if v := r.URL.Query().Get("patronymic"); v != "" {
+		filter.Patronymic = &v
+	}
+	if v := r.URL.Query().Get("address"); v != "" {
+		filter.Address = &v
+	}
+	if v := r.URL.Query().Get("timezone"); v != "" {
+		filter.Timezone = &v
+	}
+	if v := r.URL.Query().Get("email"); v != "" {
+		filter.Email = &v
+	}
+
+	if v := r.URL.Query().Get("limit"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			h.log.Info("invalid limit format")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		pagination.Limit = val
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			h.log.Info("invalid offset format")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		pagination.Offset = val
+	}
+
+	users, err := h.storage.GetPersons(filter, pagination)
+	if err != nil {
+		h.log.Info("error getting users from storage: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(users); err != nil {
+		h.log.Info("error encoding response: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+// @Summary Add task
+// @Description Add a new task to the database
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Param task body models.Task true "Task Info"
+// @Success 200 {string} string "Task added successfully"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/task [post]
+func (h *BaseController) AddTask(w http.ResponseWriter, r *http.Request) {
+	var task models.Task
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	task.CreatedAt = time.Now()
+
+	if err := h.storage.InsertTask(task); err != nil {
+		h.log.Info("error inserting task to storage: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	h.log.Info("Task added successfully")
+}
+
+// @Summary Update task
+// @Description Update a task in the database
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Param task body models.Task true "Task Info"
+// @Success 200 {string} string "Task updated successfully"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 404 {string} string "Not Found"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/task [put]
+func (h *BaseController) UpdateTask(w http.ResponseWriter, r *http.Request) {
+	var task models.Task
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err := h.storage.UpdateTask(task); err == storage.ErrNotFound {
+		h.log.Info("task not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	} else if err != nil {
+		h.log.Info("error updating task in storage: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	h.log.Info("Task updated successfully")
+}
+
+// @Summary Delete task
+// @Description Delete a task from the database
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Param id query int true "Task ID"
+// @Success 200 {string} string "Task deleted successfully"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 404 {string} string "Not Found"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/task [delete]
+func (h *BaseController) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		h.log.Info("invalid task ID format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	err = h.storage.DeleteTask(id)
+	if err == storage.ErrNotFound {
+		h.log.Info("task not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	} else if err != nil {
+		h.log.Info("error deleting task from storage: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	h.log.Info("Task deleted successfully")
+}
+
+// @Summary Get tasks
+// @Description Get tasks from the database
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Param name query string false "Name"
+// @Param description query string false "Description"
+// @Param limit query int false "Limit"
+// @Param offset query int false "Offset"
+// @Success 200 {array} models.Task "List of tasks"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/tasks [get]
+func (h *BaseController) GetTasks(w http.ResponseWriter, r *http.Request) {
+	var filter models.TaskFilter
+	var pagination models.Pagination
+
+	if v := r.URL.Query().Get("name"); v != "" {
+		filter.Name = &v
+	}
+	if v := r.URL.Query().Get("description"); v != "" {
+		filter.Description = &v
+	}
+	if v := r.URL.Query().Get("limit"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			h.log.Info("invalid limit format")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		pagination.Limit = val
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		val, err := strconv.Atoi(v)
+		if err != nil {
+			h.log.Info("invalid offset format")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		pagination.Offset = val
+	}
+
+	tasks, err := h.storage.GetTasks(filter, pagination)
+	if err != nil {
+		h.log.Info("error getting tasks from storage: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(tasks); err != nil {
+		h.log.Info("error encoding response: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func (h *BaseController) GetPing(w http.ResponseWriter, r *http.Request) {
