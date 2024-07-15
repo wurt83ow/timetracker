@@ -54,7 +54,7 @@ func NewBDKeeper(dsn func() string, log Log) *BDKeeper {
 
 	dir, err := os.Getwd()
 	if err != nil {
-		log.Info("error getting getwd: ", zap.Error(err))
+		log.Info("error getting current directory: ", zap.Error(err))
 	}
 
 	// fix error test path
@@ -70,12 +70,14 @@ func NewBDKeeper(dsn func() string, log Log) *BDKeeper {
 		"postgres",
 		driver)
 	if err != nil {
-		log.Info("Error creating migration instance : ", zap.Error(err))
+		log.Info("Error creating migration instance: ", zap.Error(err))
+		return nil
 	}
 
 	err = m.Up()
 	if err != nil {
 		log.Info("Error while performing migration: ", zap.Error(err))
+		return nil
 	}
 
 	log.Info("Connected!")
