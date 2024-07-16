@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wurt83ow/gophermart/internal/models"
+	"github.com/wurt83ow/timetracker/internal/models"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 type External interface {
-	GetExtOrderAccruel(string) (models.ExtRespOrder, error)
+	GetUserInfo(int, int) (models.ExtUserData, error)
 }
 
 type Log interface {
@@ -41,7 +41,6 @@ func NewPool(tasks []*Task, concurrency func() string, log Log, TaskExecutionInt
 		taskInterval = 3000
 	}
 
-	fmt.Println("44444444444444444444444444444444444444444444444", concurrency())
 	conc, err := strconv.Atoi(concurrency())
 	if err != nil {
 		log.Info("cannot convert concurrency option: ", zap.Error(err))

@@ -104,24 +104,24 @@ func (s *MemoryStorage) UpdateUsersData(result []models.ExtUserData) error {
 	return nil
 }
 
-func (s *MemoryStorage) InsertPerson(person models.User) error {
-	key := fmt.Sprintf("%d %d", person.PassportSerie, person.PassportNumber)
+func (s *MemoryStorage) InsertUser(user models.User) error {
+	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
 	if _, exists := s.users[key]; exists {
 		return ErrConflict
 	}
 
 	// Save the user to the keeper
-	if err := s.keeper.SaveUser(key, person); err != nil {
+	if err := s.keeper.SaveUser(key, user); err != nil {
 		return err
 	}
 
 	// Also save to the in-memory map
-	s.users[key] = person
+	s.users[key] = user
 
 	return nil
 }
 
-func (s *MemoryStorage) UpdatePerson(user models.User) error {
+func (s *MemoryStorage) UpdateUser(user models.User) error {
 	// Формируем ключ для поиска пользователя в хранилище по серии и номеру паспорта
 	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
 
@@ -187,7 +187,7 @@ func (s *MemoryStorage) GetUsers(filter models.Filter, pagination models.Paginat
 	return result[start:end], nil
 }
 
-func (s *MemoryStorage) DeletePerson(passportSerie, passportNumber int) error {
+func (s *MemoryStorage) DeleteUser(passportSerie, passportNumber int) error {
 	key := fmt.Sprintf("%d %d", passportSerie, passportNumber)
 	if _, exists := s.users[key]; !exists {
 		return ErrNotFound

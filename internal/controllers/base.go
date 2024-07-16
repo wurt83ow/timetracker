@@ -24,9 +24,9 @@ type IExternalClient interface {
 
 type Storage interface {
 	GetBaseConnection() bool
-	InsertPerson(models.User) error
-	UpdatePerson(models.User) error
-	DeletePerson(int, int) error
+	InsertUser(models.User) error
+	UpdateUser(models.User) error
+	DeleteUser(int, int) error
 	GetUsers(models.Filter, models.Pagination) ([]models.User, error)
 
 	InsertTask(models.Task) error
@@ -75,9 +75,9 @@ func (h *BaseController) Route() *chi.Mux {
 	// r.Post("/api/user/register", h.Register)
 	// r.Post("/api/user/login", h.Login)
 	r.Get("/ping", h.GetPing)
-	r.Post("/api/person", h.AddPerson)
-	r.Put("/api/person", h.UpdatePerson)
-	r.Delete("/api/person", h.DeletePerson)
+	r.Post("/api/user", h.AddUser)
+	r.Put("/api/user", h.UpdateUser)
+	r.Delete("/api/user", h.DeleteUser)
 
 	// group where the middleware authorization is needed
 	r.Group(func(r chi.Router) {
@@ -193,17 +193,17 @@ func (h *BaseController) Route() *chi.Mux {
 // 	h.log.Info("incorrect login/password pair, request status 401: ", metod)
 // }
 
-// @Summary Add person
-// @Description Add a new person to the database
+// @Summary Add user
+// @Description Add a new user to the database
 // @Tags User
 // @Accept json
 // @Produce json
-// @Param person body models.User true "Person Info"
-// @Success 200 {string} string "Person added successfully"
+// @Param user body models.User true "User Info"
+// @Success 200 {string} string "User added successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 500 {string} string "Internal Server Error"
-// @Router /api/person [post]
-func (h *BaseController) AddPerson(w http.ResponseWriter, r *http.Request) {
+// @Router /api/user [post]
+func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 	type RequestData struct {
 		PassportNumber string `json:"passportNumber"`
 	}
@@ -236,7 +236,7 @@ func (h *BaseController) AddPerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	person := models.User{
+	user := models.User{
 		UUID:           uuid.New().String(),
 		PassportSerie:  passportSerie,
 		PassportNumber: passportNumber,
@@ -244,62 +244,62 @@ func (h *BaseController) AddPerson(w http.ResponseWriter, r *http.Request) {
 		LastCheckedAt:  time.Now(),
 	}
 
-	if err := h.storage.InsertPerson(person); err != nil {
-		h.log.Info("error inserting person to storage: ", zap.Error(err))
+	if err := h.storage.InsertUser(user); err != nil {
+		h.log.Info("error inserting user to storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	h.log.Info("Person added successfully")
+	h.log.Info("User added successfully")
 }
 
-// @Summary Update person
-// @Description Update a person in the database
+// @Summary Update user
+// @Description Update a user in the database
 // @Tags User
 // @Accept json
 // @Produce json
-// @Param person body models.User true "Person Info"
-// @Success 200 {string} string "Person updated successfully"
+// @Param user body models.User true "User Info"
+// @Success 200 {string} string "User updated successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 404 {string} string "Not Found"
 // @Failure 500 {string} string "Internal Server Error"
-// @Router /api/person [put]
-func (h *BaseController) UpdatePerson(w http.ResponseWriter, r *http.Request) {
-	var person models.User
-	if err := json.NewDecoder(r.Body).Decode(&person); err != nil {
+// @Router /api/user [put]
+func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	var user models.User
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	if err := h.storage.UpdatePerson(person); err == storage.ErrNotFound {
+	if err := h.storage.UpdateUser(user); err == storage.ErrNotFound {
 		h.log.Info("user not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	} else if err != nil {
-		h.log.Info("error updating person in storage: ", zap.Error(err))
+		h.log.Info("error updating user in storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	h.log.Info("Person updated successfully")
+	h.log.Info("User updated successfully")
 }
 
-// @Summary Delete person
-// @Description Delete a person from the database
+// @Summary Delete user
+// @Description Delete a user from the database
 // @Tags User
 // @Accept json
 // @Produce json
 // @Param passportSerie query int true "Passport Series"
 // @Param passportNumber query int true "Passport Number"
-// @Success 200 {string} string "Person deleted successfully"
+// @Success 200 {string} string "User deleted successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 404 {string} string "Not Found"
 // @Failure 500 {string} string "Internal Server Error"
-// @Router /api/person [delete]
-func (h *BaseController) DeletePerson(w http.ResponseWriter, r *http.Request) {
+// @Router /api/user [delete]
+func (h *BaseController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	passportSerieStr := r.URL.Query().Get("passportSerie")
 	passportNumberStr := r.URL.Query().Get("passportNumber")
 
@@ -317,19 +317,19 @@ func (h *BaseController) DeletePerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.storage.DeletePerson(passportSerie, passportNumber)
+	err = h.storage.DeleteUser(passportSerie, passportNumber)
 	if err == storage.ErrNotFound {
 		h.log.Info("user not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	} else if err != nil {
-		h.log.Info("error deleting person from storage: ", zap.Error(err))
+		h.log.Info("error deleting user from storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	h.log.Info("Person deleted successfully")
+	h.log.Info("User deleted successfully")
 }
 
 // @Summary Get users

@@ -22,7 +22,7 @@ type Log interface {
 }
 
 type Storage interface {
-	GetNonUpdateUsers() ([]ExtUserData, error)
+	GetNonUpdateUsers() ([]models.ExtUserData, error)
 	UpdateUsersData([]models.ExtUserData) error
 }
 
@@ -99,12 +99,12 @@ func (a *ApiService) UpdateUsers(ctx context.Context) {
 				result = append(result, j)
 			}
 		case <-t.C:
-			orders, err := a.storage.GetNonUpdateUsers()
+			users, err := a.storage.GetNonUpdateUsers()
 			if err != nil {
 				return
 			}
 
-			a.CreateUsersTask(orders)
+			a.CreateUsersTask(users)
 
 			if len(result) != 0 {
 				a.doWork(result)
@@ -124,50 +124,33 @@ func (a *ApiService) GetResults() <-chan interface{} {
 	return a.results
 }
 
-func (a *ApiService) CreateUsersTask(u []string) {
+func (a *ApiService) CreateUsersTask(users []models.ExtUserData) {
 	var task *workerpool.Task
 
-	for _, o := range orders {
-		taskID := o
+	for _, user := range users {
+
 		task = workerpool.NewTask(func(data interface{}) error {
-			order, ok := data.(string)
+			usr, ok := data.(models.ExtUserData)
 			if ok { // type assertion failed
-				orderdata, err := a.external.GetExtOrderAccruel(order)
+				usrinfo, err := a.external.GetUserInfo(usr.PassportSerie, usr.PassportNumber)
 				if err != nil {
 					return fmt.Errorf("failed to create order task: %w", err)
 				}
-				a.log.Info("processed task: ", zap.String("order", order))
-				a.AddResults(orderdata)
+				a.log.Info("processed task: ", zap.String("usefinfo", fmt.Sprintf("%d%d", usr.PassportSerie, usr.PassportNumber)))
+				a.AddResults(usrinfo)
 			}
 
 			return nil
-		}, taskID)
+		}, user)
 		a.pool.AddTask(task)
 	}
 }
 
 func (a *ApiService) doWork(result []models.ExtUserData) {
-	// perform a group update of the orders table (status field)
-	err := a.storage.UpdateUsersDataFromAPI(result)
+	// perform a group update of the users table (field Surname, Name, Address)
+	err := a.storage.UpdateUsersData(result)
 	if err != nil {
 		a.log.Info("errors when updating order status: ", zap.Error(err))
 	}
 
-	// add records with accruel to savings_account
-	var dmx sync.RWMutex
-
-	orders := make(map[string]models.ExtUserData, 0)
-
-	for _, o := range result {
-		if o.Accrual != 0 {
-			dmx.RLock()
-			orders[o.Order] = o
-			dmx.RUnlock()
-		}
-	}
-
-	err = a.storage.InsertAccruel(orders)
-	if err != nil {
-		a.log.Info("errors when accruel inserting: ", zap.Error(err))
-	}
 }
