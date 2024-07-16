@@ -80,7 +80,7 @@ func NewMemoryStorage(keeper Keeper, log Log) *MemoryStorage {
 	}
 }
 
-func (s *MemoryStorage) UpdateUsersData(result []models.ExtUserData) error {
+func (s *MemoryStorage) UpdateUsersInfo(result []models.ExtUserData) error {
 
 	err := s.keeper.UpdateUsersInfo(result)
 	if err != nil {

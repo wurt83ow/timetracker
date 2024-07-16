@@ -144,19 +144,20 @@ func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
 
 	query := `
 		UPDATE User SET
-			surname = CASE
-				WHEN passportSerie = any($1) AND passportNumber = any($2) THEN unnest($3)
-				ELSE surname
-			END,
-			name = CASE
-				WHEN passportSerie = any($1) AND passportNumber = any($2) THEN unnest($4)
-				ELSE name
-			END,
-			address = CASE
-				WHEN passportSerie = any($1) AND passportNumber = any($2) THEN unnest($5)
-				ELSE address
-			END
-		WHERE (passportSerie, passportNumber) IN (SELECT unnest($1), unnest($2))
+			surname = updated.surname,
+			name = updated.name,
+			address = updated.address,
+			last_checked_at = CURRENT_TIMESTAMP
+		FROM (
+			SELECT
+				unnest($1::int[]) AS passportSerie,
+				unnest($2::int[]) AS passportNumber,
+				unnest($3::text[]) AS surname,
+				unnest($4::text[]) AS name,
+				unnest($5::text[]) AS address
+		) AS updated
+		WHERE User.passportSerie = updated.passportSerie
+		AND User.passportNumber = updated.passportNumber
 	`
 
 	_, err := bd.conn.Exec(

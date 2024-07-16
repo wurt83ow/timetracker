@@ -23,7 +23,7 @@ type Log interface {
 
 type Storage interface {
 	GetNonUpdateUsers() ([]models.ExtUserData, error)
-	UpdateUsersData([]models.ExtUserData) error
+	UpdateUsersInfo([]models.ExtUserData) error
 }
 
 type Pool interface {
@@ -148,7 +148,7 @@ func (a *ApiService) CreateUsersTask(users []models.ExtUserData) {
 
 func (a *ApiService) doWork(result []models.ExtUserData) {
 	// perform a group update of the users table (field Surname, Name, Address)
-	err := a.storage.UpdateUsersData(result)
+	err := a.storage.UpdateUsersInfo(result)
 	if err != nil {
 		a.log.Info("errors when updating order status: ", zap.Error(err))
 	}
