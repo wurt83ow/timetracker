@@ -48,15 +48,13 @@ type TimeEntry struct {
 	TotalHours float64   `db:"total_hours" json:"total_hours"`
 }
 
-// UserFilterParams представляет структуру параметров фильтрации пользователей
-type UserFilterParams struct {
+// ExtUserData представляет структуру параметров пользователей
+type ExtUserData struct {
 	PassportSerie  int    `json:"passportSerie,omitempty"`
 	PassportNumber int    `json:"passportNumber,omitempty"`
 	Surname        string `json:"surname,omitempty"`
 	Name           string `json:"name,omitempty"`
-	Username       string `json:"username,omitempty"`
-	Page           int    `json:"page,omitempty"`
-	PageSize       int    `json:"pageSize,omitempty"`
+	Address        string `json:"address,omitempty"`
 }
 
 // UserTimeReport представляет структуру отчета по времени для пользователя

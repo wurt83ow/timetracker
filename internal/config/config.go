@@ -11,7 +11,8 @@ import (
 
 type Options struct {
 	flagRunAddr, flagLogLevel, flagDataBaseDSN,
-	flagJWTSigningKey, flagConcurrency, flagTaskExecutionInterval string
+	flagJWTSigningKey, flagConcurrency, flagTaskExecutionInterval,
+	flagUserUpdateInterval string
 }
 
 func NewOptions() *Options {
@@ -31,6 +32,7 @@ func (o *Options) ParseFlags() {
 	regStringVar(&o.flagTaskExecutionInterval, "i", getEnvOrDefault("TASK_EXECUTION_INTERVAL", "3000"), "Task execution interval in milliseconds")
 	regStringVar(&o.flagJWTSigningKey, "j", getEnvOrDefault("JWT_SIGNING_KEY", "test_key"), "jwt signing key")
 	regStringVar(&o.flagLogLevel, "l", getEnvOrDefault("LOG_LEVEL", "debug"), "log level")
+	regStringVar(&o.flagUserUpdateInterval, "u", getEnvOrDefault("USER_UPDATE_INTERVAL", "1d"), "user update interval")
 
 	// parse the arguments passed to the server into registered variables
 	flag.Parse()
@@ -58,6 +60,10 @@ func (o *Options) Concurrency() string {
 
 func (o *Options) TaskExecutionInterval() string {
 	return o.flagTaskExecutionInterval
+}
+
+func (o *Options) UserUpdateInterval() string {
+	return o.flagUserUpdateInterval
 }
 
 func regStringVar(p *string, name string, value string, usage string) {

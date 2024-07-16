@@ -38,6 +38,8 @@ type MemoryStorage struct {
 type Keeper interface {
 	LoadUsers() (StorageUsers, error)
 	SaveUser(string, models.People) error
+	UpdateUser(user models.People) error
+	UpdateUsersInfo([]models.ExtUserData) error
 	DeleteUser(int, int) error
 
 	LoadTasks() (StorageTasks, error)
@@ -77,6 +79,30 @@ func NewMemoryStorage(keeper Keeper, log Log) *MemoryStorage {
 	}
 }
 
+func (s *MemoryStorage) UpdateUsersData(result []models.ExtUserData) error {
+
+	err := s.keeper.UpdateUsersInfo(result)
+	if err != nil {
+		return err
+	}
+
+	for _, v := range result {
+
+		key := fmt.Sprintf("%d %d", v.PassportSerie, v.PassportNumber)
+		if o, exists := s.users[key]; exists {
+			if exists {
+
+				o.Surname = v.Surname
+				o.Name = v.Name
+				o.Address = v.Address
+				s.users[key] = o
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *MemoryStorage) InsertPerson(person models.People) error {
 	key := fmt.Sprintf("%d %d", person.PassportSerie, person.PassportNumber)
 	if _, exists := s.users[key]; exists {
@@ -95,11 +121,22 @@ func (s *MemoryStorage) InsertPerson(person models.People) error {
 }
 
 func (s *MemoryStorage) UpdatePerson(user models.People) error {
+	// Формируем ключ для поиска пользователя в хранилище по серии и номеру паспорта
 	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
+
+	// Проверяем, существует ли пользователь с таким ключом в хранилище
 	if _, exists := s.users[key]; !exists {
 		return ErrNotFound
 	}
+
+	// Обновляем пользователя в памяти
 	s.users[key] = user
+
+	// Пытаемся обновить пользователя через keeper
+	if err := s.keeper.UpdateUser(user); err != nil {
+		return err
+	}
+
 	return nil
 }
 

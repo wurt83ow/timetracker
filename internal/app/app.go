@@ -47,7 +47,7 @@ func (server *Server) Serve() {
 	nLogger.Info("Это Info", zap.Error(err))
 
 	// initialize the keeper instance
-	keeper := initializeKeeper(option.DataBaseDSN, nLogger)
+	keeper := initializeKeeper(option.DataBaseDSN, nLogger, option.UserUpdateInterval)
 	defer keeper.Close()
 
 	// initialize the storage instance
@@ -72,12 +72,12 @@ func (server *Server) Serve() {
 
 }
 
-func initializeKeeper(dataBaseDSN func() string, logger *logger.Logger) *bdkeeper.BDKeeper {
+func initializeKeeper(dataBaseDSN func() string, logger *logger.Logger, userUpdateInterval func() string) *bdkeeper.BDKeeper {
 	if dataBaseDSN() == "" {
 		return nil
 	}
 
-	return bdkeeper.NewBDKeeper(dataBaseDSN, logger)
+	return bdkeeper.NewBDKeeper(dataBaseDSN, logger, userUpdateInterval)
 }
 
 func initializeStorage(keeper storage.Keeper, logger *logger.Logger) *storage.MemoryStorage {

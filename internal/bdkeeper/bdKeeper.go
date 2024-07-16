@@ -11,6 +11,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file" // registers a migrate driver.
 	_ "github.com/jackc/pgx/v5/stdlib"                   // registers a pgx driver.
+	"github.com/lib/pq"
 	"github.com/wurt83ow/timetracker/internal/models"
 	"github.com/wurt83ow/timetracker/internal/storage"
 	"go.uber.org/zap"
@@ -22,11 +23,12 @@ type Log interface {
 }
 
 type BDKeeper struct {
-	conn *sql.DB
-	log  Log
+	conn               *sql.DB
+	log                Log
+	userUpdateInterval func() string
 }
 
-func NewBDKeeper(dsn func() string, log Log) *BDKeeper {
+func NewBDKeeper(dsn func() string, log Log, userUpdateInterval func() string) *BDKeeper {
 	addr := dsn()
 	if addr == "" {
 		log.Info("database dsn is empty")
@@ -79,8 +81,9 @@ func NewBDKeeper(dsn func() string, log Log) *BDKeeper {
 	log.Info("Connected!")
 
 	return &BDKeeper{
-		conn: conn,
-		log:  log,
+		conn:               conn,
+		log:                log,
+		userUpdateInterval: userUpdateInterval,
 	}
 }
 
@@ -116,6 +119,98 @@ func (bd *BDKeeper) SaveUser(key string, user models.People) error {
 	}
 
 	bd.log.Info("User saved successfully: ", zap.String("key", key))
+	return nil
+}
+
+func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
+	if len(users) == 0 {
+		return nil
+	}
+
+	// Подготовка массивов для пакетного обновления
+	passportSeries := make([]int, len(users))
+	passportNumbers := make([]int, len(users))
+	surnames := make([]string, len(users))
+	names := make([]string, len(users))
+	addresses := make([]string, len(users))
+
+	for i, user := range users {
+		passportSeries[i] = user.PassportSerie
+		passportNumbers[i] = user.PassportNumber
+		surnames[i] = user.Surname
+		names[i] = user.Name
+		addresses[i] = user.Address
+	}
+
+	query := `
+		UPDATE People SET
+			surname = CASE
+				WHEN passportSerie = any($1) AND passportNumber = any($2) THEN unnest($3)
+				ELSE surname
+			END,
+			name = CASE
+				WHEN passportSerie = any($1) AND passportNumber = any($2) THEN unnest($4)
+				ELSE name
+			END,
+			address = CASE
+				WHEN passportSerie = any($1) AND passportNumber = any($2) THEN unnest($5)
+				ELSE address
+			END
+		WHERE (passportSerie, passportNumber) IN (SELECT unnest($1), unnest($2))
+	`
+
+	_, err := bd.conn.Exec(
+		query,
+		pq.Array(passportSeries),
+		pq.Array(passportNumbers),
+		pq.Array(surnames),
+		pq.Array(names),
+		pq.Array(addresses),
+	)
+	if err != nil {
+		bd.log.Info("Ошибка при пакетном обновлении данных пользователей в базе данных: ", zap.Error(err))
+		return err
+	}
+
+	bd.log.Info("Данные пользователей успешно обновлены")
+	return nil
+}
+
+func (bd *BDKeeper) UpdateUser(user models.People) error {
+	query := `
+		UPDATE People SET
+			surname = $4,
+			name = $5,
+			patronymic = $6,
+			address = $7,
+			default_end_time = $8,
+			timezone = $9,
+			username = $10,
+			password_hash = $11,
+			last_checked_at = $12
+		WHERE passportSerie = $2 AND passportNumber = $3
+	`
+	_, err := bd.conn.Exec(
+		query,
+		user.UUID,
+		user.PassportSerie,
+		user.PassportNumber,
+		user.Surname,
+		user.Name,
+		user.Patronymic,
+		user.Address,
+		user.DefaultEndTime,
+		user.Timezone,
+		user.Email,
+		user.Hash,
+		user.LastCheckedAt,
+	)
+	if err != nil {
+		bd.log.Info("Ошибка при обновлении данных пользователя в базе данных: ", zap.Error(err))
+		return err
+	}
+
+	bd.log.Info("Данные пользователя успешно обновлены: ", zap.Int("passportSerie", user.PassportSerie), zap.Int("passportNumber", user.PassportNumber))
 	return nil
 }
 
@@ -197,6 +292,65 @@ func (kp *BDKeeper) DeleteUser(passportSerie, passportNumber int) error {
 
 	kp.log.Info("User deleted successfully", zap.Int("passportSerie", passportSerie), zap.Int("passportNumber", passportNumber))
 	return nil
+}
+
+func (kp *BDKeeper) GetNonUpdateUsers() ([]models.ExtUserData, error) {
+	ctx := context.Background()
+
+	// Read the interval from environment variable
+	updateInterval, err := time.ParseDuration(kp.userUpdateInterval())
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse USER_UPDATE_INTERVAL: %w", err)
+	}
+
+	// get current time and calculate the threshold time
+	currentTime := time.Now().UTC()
+	thresholdTime := currentTime.Add(-updateInterval)
+
+	// Prepare the SQL query
+	sql := `
+	SELECT
+		passportSerie,
+		passportNumber,
+		surname,
+		name,
+		address
+	FROM
+		public.people
+	WHERE
+		last_checked_at <= $1
+	LIMIT 100`
+
+	rows, err := kp.conn.QueryContext(ctx, sql, thresholdTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get non-updated users: %w", err)
+	}
+	defer rows.Close()
+
+	users := make([]models.ExtUserData, 0)
+
+	for rows.Next() {
+		var user models.ExtUserData
+
+		err := rows.Scan(
+			&user.PassportSerie,
+			&user.PassportNumber,
+			&user.Surname,
+			&user.Name,
+			&user.Address,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user: %w", err)
+		}
+
+		users = append(users, user)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to process rows: %w", err)
+	}
+
+	return users, nil
 }
 
 func (bd *BDKeeper) SaveTask(task models.Task) error {
@@ -284,111 +438,6 @@ func (kp *BDKeeper) DeleteTask(id int) error {
 	kp.log.Info("Task deleted successfully", zap.Int("id", id))
 	return nil
 }
-
-// func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
-// 	ctx := context.Background()
-
-// 	// get users from bd
-// 	sql := `
-// 	SELECT
-// 		user_id,
-// 		name,
-// 		email,
-// 		hash
-// 	FROM
-// 		users`
-
-// 	rows, err := kp.conn.QueryContext(ctx, sql)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to load users: %w", err)
-// 	}
-
-// 	if err = rows.Err(); err != nil {
-// 		return nil, fmt.Errorf("failed to load users: %w", err)
-// 	}
-
-// 	defer rows.Close()
-
-// 	data := make(storage.StorageUsers)
-
-// 	for rows.Next() {
-// 		var m models.People
-
-// 		err := rows.Scan(&m.UUID, &m.Name, &m.Email, &m.Hash)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("failed to load users: %w", err)
-// 		}
-
-// 		data[m.Email] = m
-// 	}
-
-// 	return data, nil
-// }
-
-// func (kp *BDKeeper) SaveUser(key string, data models.People) (models.People, error) {
-// 	ctx := context.Background()
-
-// 	var id string
-
-// 	if data.UUID == "" {
-// 		neuuid := uuid.New()
-// 		id = neuuid.String()
-// 	} else {
-// 		id = data.UUID
-// 	}
-
-// 	sql := `
-// 	INSERT INTO users (user_id, email, hash, name)
-// 		VALUES ($1, $2, $3, $4)
-// 	RETURNING
-// 		user_id`
-// 	_, err := kp.conn.ExecContext(ctx, sql,
-// 		id, data.Email, data.Hash, data.Name)
-
-// 	var (
-// 		cond string
-// 		hash []byte
-// 	)
-
-// 	if data.Hash != nil {
-// 		cond = "AND u.hash = $2"
-// 		hash = data.Hash
-// 	}
-
-// 	sql = `
-// 	SELECT
-// 		u.user_id,
-// 		u.email,
-// 		u.hash,
-// 		u.name
-// 	FROM
-// 		users u
-// 	WHERE
-// 		u.email = $1 %s`
-// 	sql = fmt.Sprintf(sql, cond)
-// 	row := kp.conn.QueryRowContext(ctx, sql, data.Email, hash)
-
-// 	// read the values from the database record into the corresponding fields of the structure
-// 	var m models.People
-
-// 	nerr := row.Scan(&m.UUID, &m.Email, &m.Hash, &m.Name)
-// 	if nerr != nil {
-// 		return data, fmt.Errorf("failed to save user: %w", nerr)
-// 	}
-
-// 	if err != nil {
-// 		var e *pgconn.PgError
-// 		if errors.As(err, &e) && e.Code == pgerrcode.UniqueViolation {
-// 			kp.log.Info("unique field violation on column: ", zap.Error(err))
-
-// 			return m, storage.ErrConflict
-// 		}
-
-// 		return m, fmt.Errorf("failed to save user: %w", err)
-// 	}
-
-// 	return m, nil
-// }
 
 func (kp *BDKeeper) Ping() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Microsecond)
