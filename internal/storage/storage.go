@@ -41,6 +41,7 @@ type Keeper interface {
 	UpdateUser(user models.People) error
 	UpdateUsersInfo([]models.ExtUserData) error
 	DeleteUser(int, int) error
+	GetNonUpdateUsers() ([]models.ExtUserData, error)
 
 	LoadTasks() (StorageTasks, error)
 	SaveTask(task models.Task) error
@@ -201,6 +202,15 @@ func (s *MemoryStorage) DeletePerson(passportSerie, passportNumber int) error {
 	delete(s.users, key)
 
 	return nil
+}
+
+func (s *MemoryStorage) GetNonUpdateUsers() ([]models.ExtUserData, error) {
+	users, err := s.keeper.GetNonUpdateUsers()
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
 
 func (s *MemoryStorage) InsertTask(task models.Task) error {
