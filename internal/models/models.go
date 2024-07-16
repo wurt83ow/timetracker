@@ -17,7 +17,6 @@ type User struct {
 	Address        string    `db:"address" json:"address"`
 	DefaultEndTime time.Time `db:"default_end_time" json:"default_end_time"`
 	Timezone       string    `db:"timezone" json:"timezone"`
-	Email          string    `db:"username" json:"username"`
 	Hash           []byte    `db:"password_hash" json:"password_hash"`
 	LastCheckedAt  time.Time `db:"last_checked_at" json:"last_checked_at"`
 }
@@ -25,6 +24,10 @@ type User struct {
 type RequestUser struct {
 	PassportNumber string `json:"passportNumber"`
 	Password       string `json:"password"`
+}
+
+type ResponseUser struct {
+	Response string `json:"response,omitempty"`
 }
 
 // TimeEntry представляет структуру записи времени
@@ -53,7 +56,6 @@ type Filter struct {
 	Patronymic     *string
 	Address        *string
 	Timezone       *string
-	Email          *string
 }
 
 type Pagination struct {

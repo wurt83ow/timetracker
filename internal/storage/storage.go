@@ -17,7 +17,6 @@ var (
 	ErrConflict     = errors.New("data conflict")
 	ErrInsufficient = errors.New("insufficient funds")
 	ErrNotFound     = errors.New("user not found")
-	 
 )
 
 type (
@@ -170,9 +169,6 @@ func (s *MemoryStorage) GetUsers(filter models.Filter, pagination models.Paginat
 			continue
 		}
 		if filter.Timezone != nil && !strings.Contains(user.Timezone, *filter.Timezone) {
-			continue
-		}
-		if filter.Email != nil && !strings.Contains(user.Email, *filter.Email) {
 			continue
 		}
 

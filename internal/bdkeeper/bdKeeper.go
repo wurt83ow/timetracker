@@ -109,8 +109,7 @@ func (bd *BDKeeper) SaveUser(key string, user models.User) error {
 		user.Patronymic,
 		user.Address,
 		user.DefaultEndTime,
-		user.Timezone,
-		user.Email,
+		user.Timezone,		
 		user.Hash,
 		user.LastCheckedAt,
 	)
@@ -202,8 +201,7 @@ func (bd *BDKeeper) UpdateUser(user models.User) error {
 		user.Patronymic,
 		user.Address,
 		user.DefaultEndTime,
-		user.Timezone,
-		user.Email,
+		user.Timezone,		
 		user.Hash,
 		user.LastCheckedAt,
 	)
@@ -262,8 +260,7 @@ func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 			&m.Patronymic,
 			&m.Address,
 			&m.DefaultEndTime,
-			&m.Timezone,
-			&m.Email,
+			&m.Timezone,			
 			&m.Hash,
 			&m.LastCheckedAt,
 		)

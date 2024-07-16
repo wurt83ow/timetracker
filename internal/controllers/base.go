@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -159,59 +160,66 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 	h.log.Info("sending HTTP 200 response")
 }
 
-// func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
-// 	metod := zap.String("method", r.Method)
+func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
+	metod := zap.String("method", r.Method)
 
-// 	var rb models.RequestUser
-// 	if err := json.NewDecoder(r.Body).Decode(&rb); err != nil {
-// 		// invalid request format
-// 		w.WriteHeader(http.StatusBadRequest)
-// 		h.log.Info("invalid request format, request status 400: ", metod)
-// 		return
-// 	}
+	var rb models.RequestUser
+	if err := json.NewDecoder(r.Body).Decode(&rb); err != nil {
+		// invalid request format
+		w.WriteHeader(http.StatusBadRequest)
+		h.log.Info("invalid request format, request status 400: ", metod)
+		return
+	}
 
-// 	user, err := h.storage.GetUser(rb.Email)
-// 	if err != nil {
-// 		// incorrect login/password pair
-// 		w.WriteHeader(http.StatusUnauthorized) //code 401
-// 		h.log.Info("incorrect login/password pair, request status 401: ", metod)
-// 		return
-// 	}
+	passportSerie, passportNumber, err := h.parsePassportData(rb.PassportNumber)
+	if err != nil {
+		h.log.Info(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-// 	if bytes.Equal(user.Hash, h.authz.GetHash(rb.Email, rb.Password)) {
-// 		freshToken := h.authz.CreateJWTTokenForUser(user.UUID)
-// 		http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
-// 		http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
+	user, err := h.storage.GetUser(passportSerie, passportNumber)
+	if err != nil {
+		// incorrect login/password pair
+		w.WriteHeader(http.StatusUnauthorized) //code 401
+		h.log.Info("incorrect login/password pair, request status 401: ", metod)
+		return
+	}
 
-// 		w.Header().Set("Authorization", freshToken)
-// 		err := json.NewEncoder(w).Encode(models.ResponseUser{
-// 			Response: "success",
-// 		})
-// 		if err != nil {
-// 			// internal server error
-// 			w.WriteHeader(http.StatusInternalServerError) //code 500
-// 			h.log.Info("internal server error, request status 500: ", metod)
-// 			return
-// 		}
+	if bytes.Equal(user.Hash, h.authz.GetHash(rb.PassportNumber, rb.Password)) {
+		freshToken := h.authz.CreateJWTTokenForUser(rb.PassportNumber)
+		http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
+		http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
 
-// 		return
-// 	}
+		w.Header().Set("Authorization", freshToken)
+		err := json.NewEncoder(w).Encode(models.ResponseUser{
+			Response: "success",
+		})
+		if err != nil {
+			// internal server error
+			w.WriteHeader(http.StatusInternalServerError) //code 500
+			h.log.Info("internal server error, request status 500: ", metod)
+			return
+		}
 
-// 	err = json.NewEncoder(w).Encode(models.ResponseUser{
-// 		Response: "incorrect email/password",
-// 	})
+		return
+	}
 
-// 	if err != nil {
-// 		// internal server error
-// 		w.WriteHeader(http.StatusInternalServerError) //code 500
-// 		h.log.Info("internal server error, request status 500: ", metod)
-// 		return
-// 	}
+	err = json.NewEncoder(w).Encode(models.ResponseUser{
+		Response: "incorrect passport/password",
+	})
 
-// 	// incorrect login/password pair
-// 	w.WriteHeader(http.StatusUnauthorized) //code 401
-// 	h.log.Info("incorrect login/password pair, request status 401: ", metod)
-// }
+	if err != nil {
+		// internal server error
+		w.WriteHeader(http.StatusInternalServerError) //code 500
+		h.log.Info("internal server error, request status 500: ", metod)
+		return
+	}
+
+	// incorrect login/password pair
+	w.WriteHeader(http.StatusUnauthorized) //code 401
+	h.log.Info("incorrect login/password pair, request status 401: ", metod)
+}
 
 func (h *BaseController) parsePassportData(passportNumber string) (int, int, error) {
 	parts := strings.Split(passportNumber, " ")
@@ -363,8 +371,7 @@ func (h *BaseController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 // @Param name query string false "Name"
 // @Param patronymic query string false "Patronymic"
 // @Param address query string false "Address"
-// @Param timezone query string false "Timezone"
-// @Param email query string false "Email"
+// @Param timezone query string false "Timezone" 
 // @Param limit query int false "Limit"
 // @Param offset query int false "Offset"
 // @Success 200 {array} models.User "List of users"
@@ -407,9 +414,6 @@ func (h *BaseController) GetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := r.URL.Query().Get("timezone"); v != "" {
 		filter.Timezone = &v
-	}
-	if v := r.URL.Query().Get("email"); v != "" {
-		filter.Email = &v
 	}
 
 	if v := r.URL.Query().Get("limit"); v != "" {

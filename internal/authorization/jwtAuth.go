@@ -15,7 +15,7 @@ import (
 )
 
 type CustomClaims struct {
-	Email string `json:"email"`
+	PassportNumber string `json:"passport_number"`
 	jwt.StandardClaims
 }
 
@@ -121,14 +121,14 @@ func (j *JWTAuthz) DecodeJWTToUser(token string) (string, error) {
 	// There's two parts. We might decode it successfully but it might
 	// be the case we aren't Valid so you must check both
 	if decClaims, ok := decodeToken.Claims.(*CustomClaims); ok && decodeToken.Valid {
-		return decClaims.Email, nil
+		return decClaims.PassportNumber, nil
 	}
 
 	return "", err
 }
 
-func (j *JWTAuthz) GetHash(email string, password string) []byte {
-	src := []byte(email + password)
+func (j *JWTAuthz) GetHash(PassportNumber string, password string) []byte {
+	src := []byte(PassportNumber + password)
 
 	// create a new hash.Hash that calculates the SHA-256 checksum
 	h := sha256.New()
