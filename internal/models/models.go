@@ -6,8 +6,8 @@ import (
 
 type Key string
 
-// People представляет структуру данных пользователя
-type People struct {
+// User представляет структуру данных пользователя
+type User struct {
 	UUID           string    `db:"id" json:"id"`
 	PassportSerie  int       `db:"passportSerie" json:"passportSerie"`
 	PassportNumber int       `db:"passportNumber" json:"passportNumber"`

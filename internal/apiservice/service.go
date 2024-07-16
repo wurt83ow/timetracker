@@ -71,7 +71,7 @@ func (a *ApiService) Start() {
 	a.cancelFunc = canselFunc
 	a.wg.Add(1)
 
-	go a.UpdateOrders(ctx)
+	go a.UpdateUsers(ctx)
 }
 
 func (a *ApiService) Stop() {
@@ -79,7 +79,7 @@ func (a *ApiService) Stop() {
 	a.wg.Wait()
 }
 
-func (a *ApiService) UpdateOrders(ctx context.Context) {
+func (a *ApiService) UpdateUsers(ctx context.Context) {
 	t := time.NewTicker(time.Duration(a.taskInterval) * time.Millisecond)
 
 	result := make([]models.ExtUserData, 0)

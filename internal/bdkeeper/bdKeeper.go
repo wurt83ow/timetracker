@@ -87,9 +87,9 @@ func NewBDKeeper(dsn func() string, log Log, userUpdateInterval func() string) *
 	}
 }
 
-func (bd *BDKeeper) SaveUser(key string, user models.People) error {
+func (bd *BDKeeper) SaveUser(key string, user models.User) error {
 	query := `
-		INSERT INTO People (
+		INSERT INTO User (
 			id, passportSerie, passportNumber, surname, name, patronymic, address,
 			default_end_time, timezone, username, password_hash, last_checked_at
 		) VALUES (
@@ -143,7 +143,7 @@ func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
 	}
 
 	query := `
-		UPDATE People SET
+		UPDATE User SET
 			surname = CASE
 				WHEN passportSerie = any($1) AND passportNumber = any($2) THEN unnest($3)
 				ELSE surname
@@ -176,9 +176,9 @@ func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
 	return nil
 }
 
-func (bd *BDKeeper) UpdateUser(user models.People) error {
+func (bd *BDKeeper) UpdateUser(user models.User) error {
 	query := `
-		UPDATE People SET
+		UPDATE User SET
 			surname = $4,
 			name = $5,
 			patronymic = $6,
@@ -233,7 +233,7 @@ func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 		password_hash,
 		last_checked_at
 	FROM
-		People`
+		User`
 
 	rows, err := kp.conn.QueryContext(ctx, sql)
 	if err != nil {
@@ -249,7 +249,7 @@ func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 	data := make(storage.StorageUsers)
 
 	for rows.Next() {
-		var m models.People
+		var m models.User
 
 		err := rows.Scan(
 			&m.UUID,
@@ -280,7 +280,7 @@ func (kp *BDKeeper) DeleteUser(passportSerie, passportNumber int) error {
 	ctx := context.Background()
 
 	query := `
-		DELETE FROM People
+		DELETE FROM User
 		WHERE passportSerie = $1 AND passportNumber = $2
 	`
 
@@ -316,7 +316,7 @@ func (kp *BDKeeper) GetNonUpdateUsers() ([]models.ExtUserData, error) {
 		name,
 		address
 	FROM
-		public.people
+		public.User
 	WHERE
 		last_checked_at <= $1
 	LIMIT 100`

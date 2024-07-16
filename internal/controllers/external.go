@@ -38,7 +38,7 @@ func (c *ExtController) GetUserInfo(passportSerie int, passportNumber int) (mode
 
 	resp, err := http.Get(url)
 	if err != nil {
-		c.log.Info("unable to access people info service, check that it is running: ", zap.Error(err))
+		c.log.Info("unable to access user info service, check that it is running: ", zap.Error(err))
 		return models.ExtUserData{}, err
 	}
 	defer resp.Body.Close()

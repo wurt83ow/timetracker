@@ -24,10 +24,10 @@ type IExternalClient interface {
 
 type Storage interface {
 	GetBaseConnection() bool
-	InsertPerson(models.People) error
-	UpdatePerson(models.People) error
+	InsertPerson(models.User) error
+	UpdatePerson(models.User) error
 	DeletePerson(int, int) error
-	GetPersons(models.Filter, models.Pagination) ([]models.People, error)
+	GetUsers(models.Filter, models.Pagination) ([]models.User, error)
 
 	InsertTask(models.Task) error
 	UpdateTask(models.Task) error
@@ -115,7 +115,7 @@ func (h *BaseController) Route() *chi.Mux {
 // 	Hash := h.authz.GetHash(regReq.Email, regReq.Password)
 
 // 	// save the user to the storage
-// 	dataUser := models.People{UUID: uuid.New().String(), Email: regReq.Email, Hash: Hash, Name: regReq.Email}
+// 	dataUser := models.User{UUID: uuid.New().String(), Email: regReq.Email, Hash: Hash, Name: regReq.Email}
 
 // 	_, err = h.storage.InsertUser(regReq.Email, dataUser)
 // 	if err != nil {
@@ -195,10 +195,10 @@ func (h *BaseController) Route() *chi.Mux {
 
 // @Summary Add person
 // @Description Add a new person to the database
-// @Tags People
+// @Tags User
 // @Accept json
 // @Produce json
-// @Param person body models.People true "Person Info"
+// @Param person body models.User true "Person Info"
 // @Success 200 {string} string "Person added successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 500 {string} string "Internal Server Error"
@@ -236,7 +236,7 @@ func (h *BaseController) AddPerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	person := models.People{
+	person := models.User{
 		UUID:           uuid.New().String(),
 		PassportSerie:  passportSerie,
 		PassportNumber: passportNumber,
@@ -256,17 +256,17 @@ func (h *BaseController) AddPerson(w http.ResponseWriter, r *http.Request) {
 
 // @Summary Update person
 // @Description Update a person in the database
-// @Tags People
+// @Tags User
 // @Accept json
 // @Produce json
-// @Param person body models.People true "Person Info"
+// @Param person body models.User true "Person Info"
 // @Success 200 {string} string "Person updated successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 404 {string} string "Not Found"
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/person [put]
 func (h *BaseController) UpdatePerson(w http.ResponseWriter, r *http.Request) {
-	var person models.People
+	var person models.User
 	if err := json.NewDecoder(r.Body).Decode(&person); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
@@ -289,7 +289,7 @@ func (h *BaseController) UpdatePerson(w http.ResponseWriter, r *http.Request) {
 
 // @Summary Delete person
 // @Description Delete a person from the database
-// @Tags People
+// @Tags User
 // @Accept json
 // @Produce json
 // @Param passportSerie query int true "Passport Series"
@@ -334,7 +334,7 @@ func (h *BaseController) DeletePerson(w http.ResponseWriter, r *http.Request) {
 
 // @Summary Get users
 // @Description Get users from the database
-// @Tags People
+// @Tags User
 // @Accept json
 // @Produce json
 // @Param passportSerie query int false "Passport Series"
@@ -347,11 +347,11 @@ func (h *BaseController) DeletePerson(w http.ResponseWriter, r *http.Request) {
 // @Param email query string false "Email"
 // @Param limit query int false "Limit"
 // @Param offset query int false "Offset"
-// @Success 200 {array} models.People "List of users"
+// @Success 200 {array} models.User "List of users"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 500 {string} string "Internal Server Error"
-// @Router /api/persons [get]
-func (h *BaseController) GetPersons(w http.ResponseWriter, r *http.Request) {
+// @Router /api/users [get]
+func (h *BaseController) GetUsers(w http.ResponseWriter, r *http.Request) {
 	var filter models.Filter
 	var pagination models.Pagination
 
@@ -411,7 +411,7 @@ func (h *BaseController) GetPersons(w http.ResponseWriter, r *http.Request) {
 		pagination.Offset = val
 	}
 
-	users, err := h.storage.GetPersons(filter, pagination)
+	users, err := h.storage.GetUsers(filter, pagination)
 	if err != nil {
 		h.log.Info("error getting users from storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)

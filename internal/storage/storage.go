@@ -18,7 +18,7 @@ var (
 )
 
 type (
-	StorageUsers = map[string]models.People
+	StorageUsers = map[string]models.User
 	StorageTasks = map[int]models.Task
 )
 
@@ -37,8 +37,8 @@ type MemoryStorage struct {
 
 type Keeper interface {
 	LoadUsers() (StorageUsers, error)
-	SaveUser(string, models.People) error
-	UpdateUser(user models.People) error
+	SaveUser(string, models.User) error
+	UpdateUser(user models.User) error
 	UpdateUsersInfo([]models.ExtUserData) error
 	DeleteUser(int, int) error
 	GetNonUpdateUsers() ([]models.ExtUserData, error)
@@ -104,7 +104,7 @@ func (s *MemoryStorage) UpdateUsersData(result []models.ExtUserData) error {
 	return nil
 }
 
-func (s *MemoryStorage) InsertPerson(person models.People) error {
+func (s *MemoryStorage) InsertPerson(person models.User) error {
 	key := fmt.Sprintf("%d %d", person.PassportSerie, person.PassportNumber)
 	if _, exists := s.users[key]; exists {
 		return ErrConflict
@@ -121,7 +121,7 @@ func (s *MemoryStorage) InsertPerson(person models.People) error {
 	return nil
 }
 
-func (s *MemoryStorage) UpdatePerson(user models.People) error {
+func (s *MemoryStorage) UpdatePerson(user models.User) error {
 	// Формируем ключ для поиска пользователя в хранилище по серии и номеру паспорта
 	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
 
@@ -141,8 +141,8 @@ func (s *MemoryStorage) UpdatePerson(user models.People) error {
 	return nil
 }
 
-func (s *MemoryStorage) GetPersons(filter models.Filter, pagination models.Pagination) ([]models.People, error) {
-	var result []models.People
+func (s *MemoryStorage) GetUsers(filter models.Filter, pagination models.Pagination) ([]models.User, error) {
+	var result []models.User
 
 	for _, user := range s.users {
 		if filter.PassportSerie != nil && *filter.PassportSerie != user.PassportSerie {
@@ -177,7 +177,7 @@ func (s *MemoryStorage) GetPersons(filter models.Filter, pagination models.Pagin
 	end := start + pagination.Limit
 
 	if start >= len(result) {
-		return []models.People{}, nil
+		return []models.User{}, nil
 	}
 
 	if end > len(result) {
@@ -281,21 +281,21 @@ func (s *MemoryStorage) DeleteTask(id int) error {
 	return nil
 }
 
-// func (s *MemoryStorage) GetUser(k string) (models.People, error) {
+// func (s *MemoryStorage) GetUser(k string) (models.User, error) {
 // 	s.umx.RLock()
 // 	defer s.umx.RUnlock()
 
 // 	v, exists := s.users[k]
 // 	if !exists {
-// 		return models.People{}, errors.New("value with such key doesn't exist")
+// 		return models.User{}, errors.New("value with such key doesn't exist")
 // 	}
 
 // 	return v, nil
 // }
 
 // func (s *MemoryStorage) InsertUser(k string,
-// 	v models.People,
-// ) (models.People, error) {
+// 	v models.User,
+// ) (models.User, error) {
 // 	nv, err := s.SaveUser(k, v)
 // 	if err != nil {
 // 		return nv, err
@@ -309,7 +309,7 @@ func (s *MemoryStorage) DeleteTask(id int) error {
 // 	return nv, nil
 // }
 
-// func (s *MemoryStorage) SaveUser(k string, v models.People) (models.People, error) {
+// func (s *MemoryStorage) SaveUser(k string, v models.User) (models.User, error) {
 // 	if s.keeper == nil {
 // 		return v, nil
 // 	}

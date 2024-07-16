@@ -1,4 +1,4 @@
-CREATE TABLE People (
+CREATE TABLE User (
     id SERIAL PRIMARY KEY,
     passportSerie INTEGER NOT NULL,
     passportNumber INTEGER NOT NULL,
