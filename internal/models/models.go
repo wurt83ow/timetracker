@@ -22,22 +22,6 @@ type User struct {
 	LastCheckedAt  time.Time `db:"last_checked_at" json:"last_checked_at"`
 }
 
-// RequestUser представляет структуру запроса на добавление пользователя
-type RequestUserInternal struct {
-	PassportSerie  int `json:"passportSerie"`
-	PassportNumber int `json:"passportNumber"`
-}
-
-type RequestUser struct {
-	Email    string `json:"login"`
-	Password string `json:"password"`
-}
-
-// ResponseUser представляет структуру ответа на запрос
-type ResponseUser struct {
-	Response string `json:"response,omitempty"`
-}
-
 // TimeEntry представляет структуру записи времени
 type TimeEntry struct {
 	EventDate      time.Time `json:"event_date"`
@@ -54,12 +38,6 @@ type ExtUserData struct {
 	Surname        string `json:"surname,omitempty"`
 	Name           string `json:"name,omitempty"`
 	Address        string `json:"address,omitempty"`
-}
-
-// UserTimeReport представляет структуру отчета по времени для пользователя
-type UserTimeReport struct {
-	Task       string  `json:"task"`
-	TotalHours float64 `json:"total_hours"`
 }
 
 type Filter struct {

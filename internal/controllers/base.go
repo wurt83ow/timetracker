@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
+	"github.com/google/uuid"
 	authz "github.com/wurt83ow/timetracker/internal/authorization"
 	"github.com/wurt83ow/timetracker/internal/models"
 	"github.com/wurt83ow/timetracker/internal/storage"
@@ -91,56 +92,56 @@ func (h *BaseController) Route() *chi.Mux {
 	return r
 }
 
-// func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
-// 	regReq := new(models.RequestUser)
-// 	dec := json.NewDecoder(r.Body)
+func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
+	regReq := new(models.RequestUser)
+	dec := json.NewDecoder(r.Body)
 
-// 	if err := dec.Decode(&regReq); err != nil {
-// 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-// 		w.WriteHeader(http.StatusBadRequest) // code 400
+	if err := dec.Decode(&regReq); err != nil {
+		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+		w.WriteHeader(http.StatusBadRequest) // code 400
 
-// 		return
-// 	}
+		return
+	}
 
-// 	if len(regReq.Email) == 0 || len(regReq.Password) == 0 {
-// 		h.log.Info("login or password was not received")
-// 		w.WriteHeader(http.StatusBadRequest) // code 400
-// 	}
+	if len(regReq.Email) == 0 || len(regReq.Password) == 0 {
+		h.log.Info("login or password was not received")
+		w.WriteHeader(http.StatusBadRequest) // code 400
+	}
 
-// 	_, err := h.storage.GetUser(regReq.Email)
-// 	if err == nil {
-// 		// login is already taken
-// 		h.log.Info("login is already taken: ", zap.Error(err))
-// 		w.WriteHeader(http.StatusConflict) // 409
-// 		return
-// 	}
+	_, err := h.storage.GetUser(regReq.Email)
+	if err == nil {
+		// login is already taken
+		h.log.Info("login is already taken: ", zap.Error(err))
+		w.WriteHeader(http.StatusConflict) // 409
+		return
+	}
 
-// 	Hash := h.authz.GetHash(regReq.Email, regReq.Password)
+	Hash := h.authz.GetHash(regReq.Email, regReq.Password)
 
-// 	// save the user to the storage
-// 	dataUser := models.User{UUID: uuid.New().String(), Email: regReq.Email, Hash: Hash, Name: regReq.Email}
+	// save the user to the storage
+	dataUser := models.DataUser{UUID: uuid.New().String(), Email: regReq.Email, Hash: Hash, Name: regReq.Email}
 
-// 	_, err = h.storage.InsertUser(regReq.Email, dataUser)
-// 	if err != nil {
-// 		// login is already taken
-// 		if err == storage.ErrConflict {
-// 			h.log.Info("login is already taken: ", zap.Error(err))
-// 			w.WriteHeader(http.StatusConflict) //code 409
-// 		} else {
-// 			h.log.Info("error insert user to storage: ", zap.Error(err))
-// 			w.WriteHeader(http.StatusInternalServerError) // code 500
-// 			return
-// 		}
-// 	}
+	_, err = h.storage.InsertUser(regReq.Email, dataUser)
+	if err != nil {
+		// login is already taken
+		if err == storage.ErrConflict {
+			h.log.Info("login is already taken: ", zap.Error(err))
+			w.WriteHeader(http.StatusConflict) //code 409
+		} else {
+			h.log.Info("error insert user to storage: ", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError) // code 500
+			return
+		}
+	}
 
-// 	freshToken := h.authz.CreateJWTTokenForUser(dataUser.UUID)
-// 	http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
-// 	http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
+	freshToken := h.authz.CreateJWTTokenForUser(dataUser.UUID)
+	http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
+	http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
 
-// 	w.Header().Set("Authorization", freshToken)
-// 	w.WriteHeader(http.StatusOK)
-// 	h.log.Info("sending HTTP 200 response")
-// }
+	w.Header().Set("Authorization", freshToken)
+	w.WriteHeader(http.StatusOK)
+	h.log.Info("sending HTTP 200 response")
+}
 
 // func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
 // 	metod := zap.String("method", r.Method)
