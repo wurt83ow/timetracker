@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/google/uuid"
 	authz "github.com/wurt83ow/timetracker/internal/authorization"
 	"github.com/wurt83ow/timetracker/internal/models"
 	"github.com/wurt83ow/timetracker/internal/storage"
@@ -33,6 +32,10 @@ type Storage interface {
 	UpdateTask(models.Task) error
 	DeleteTask(int) error
 	GetTasks(models.TaskFilter, models.Pagination) ([]models.Task, error)
+
+	StartTaskTracking(models.TimeEntry) error
+	StopTaskTracking(models.TimeEntry) error
+	GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error)
 }
 
 type Options interface {
@@ -237,7 +240,6 @@ func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := models.User{
-		UUID:           uuid.New().String(),
 		PassportSerie:  passportSerie,
 		PassportNumber: passportNumber,
 		DefaultEndTime: time.Now(),
@@ -589,4 +591,240 @@ func (h *BaseController) GetPing(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK) // 200
 	h.log.Info("sending HTTP 200 response")
+}
+
+func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Request) {
+	type RequestData struct {
+		PassportNumber string `json:"passportNumber"`
+		TaskID         int    `json:"taskId"`
+	}
+
+	var reqData RequestData
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Разделение серии и номера паспорта
+	parts := strings.Split(reqData.PassportNumber, " ")
+	if len(parts) != 2 {
+		h.log.Info("invalid passport number format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	passportSerie, err := strconv.Atoi(parts[0])
+	if err != nil {
+		h.log.Info("invalid passport series format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	passportNumber, err := strconv.Atoi(parts[1])
+	if err != nil {
+		h.log.Info("invalid passport number format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Ищем пользователя по серии и номеру паспорта в кэше
+	filter := models.Filter{
+		PassportSerie:  &passportSerie,
+		PassportNumber: &passportNumber,
+	}
+	users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
+	if err != nil || len(users) == 0 {
+		h.log.Info("user not found", zap.Error(err))
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	user := users[0]
+
+	// Подготовка TimeEntry
+	loc, err := time.LoadLocation(user.Timezone)
+	if err != nil {
+		h.log.Info("invalid user timezone", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	startOfDay := time.Now().In(loc).Truncate(24 * time.Hour)
+
+	entry := models.TimeEntry{
+		EventDate:      startOfDay,
+		UserID:         user.UUID,
+		TaskID:         reqData.TaskID,
+		UserTimezone:   user.Timezone,
+		DefaultEndTime: user.DefaultEndTime,
+	}
+
+	// Запуск отсчета времени по задаче
+	if err := h.storage.StartTaskTracking(entry); err != nil {
+		h.log.Info("error starting task tracking", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	h.log.Info("Task tracking started successfully")
+}
+
+func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request) {
+	type RequestData struct {
+		PassportNumber string `json:"passportNumber"`
+		TaskID         int    `json:"taskId"`
+	}
+
+	var reqData RequestData
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Разделение серии и номера паспорта
+	parts := strings.Split(reqData.PassportNumber, " ")
+	if len(parts) != 2 {
+		h.log.Info("invalid passport number format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	passportSerie, err := strconv.Atoi(parts[0])
+	if err != nil {
+		h.log.Info("invalid passport series format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	passportNumber, err := strconv.Atoi(parts[1])
+	if err != nil {
+		h.log.Info("invalid passport number format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Ищем пользователя по серии и номеру паспорта в кэше
+	filter := models.Filter{
+		PassportSerie:  &passportSerie,
+		PassportNumber: &passportNumber,
+	}
+	users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
+	if err != nil || len(users) == 0 {
+		h.log.Info("user not found", zap.Error(err))
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	user := users[0]
+
+	// Подготовка TimeEntry
+	loc, err := time.LoadLocation(user.Timezone)
+	if err != nil {
+		h.log.Info("invalid user timezone", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	startOfDay := time.Now().In(loc).Truncate(24 * time.Hour)
+
+	entry := models.TimeEntry{
+		EventDate:      startOfDay,
+		UserID:         user.UUID,
+		TaskID:         reqData.TaskID,
+		UserTimezone:   user.Timezone,
+		DefaultEndTime: user.DefaultEndTime,
+	}
+
+	// Остановка отсчета времени по задаче
+	if err := h.storage.StopTaskTracking(entry); err != nil {
+		h.log.Info("error stopping task tracking", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	h.log.Info("Task tracking stopped successfully")
+}
+
+func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Request) {
+	type RequestData struct {
+		PassportNumber string `json:"passportNumber"`
+		StartDate      string `json:"startDate"`
+		EndDate        string `json:"endDate"`
+	}
+
+	var reqData RequestData
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Разделение серии и номера паспорта
+	parts := strings.Split(reqData.PassportNumber, " ")
+	if len(parts) != 2 {
+		h.log.Info("invalid passport number format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	passportSerie, err := strconv.Atoi(parts[0])
+	if err != nil {
+		h.log.Info("invalid passport series format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	passportNumber, err := strconv.Atoi(parts[1])
+	if err != nil {
+		h.log.Info("invalid passport number format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Ищем пользователя по серии и номеру паспорта в кэше
+	filter := models.Filter{
+		PassportSerie:  &passportSerie,
+		PassportNumber: &passportNumber,
+	}
+	users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
+	if err != nil || len(users) == 0 {
+		h.log.Info("user not found", zap.Error(err))
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	user := users[0]
+
+	// Парсинг дат начала и конца периода
+	startDate, err := time.Parse(time.RFC3339, reqData.StartDate)
+	if err != nil {
+		h.log.Info("invalid start date format", zap.Error(err))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	endDate, err := time.Parse(time.RFC3339, reqData.EndDate)
+	if err != nil {
+		h.log.Info("invalid end date format", zap.Error(err))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Получение сводки задач пользователя
+	summary, err := h.storage.GetUserTaskSummary(user.UUID, startDate, endDate, user.Timezone, user.DefaultEndTime)
+	if err != nil {
+		h.log.Info("error getting user task summary", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(summary); err != nil {
+		h.log.Info("error encoding response", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }

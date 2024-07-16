@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/wurt83ow/timetracker/internal/models"
 	"go.uber.org/zap"
@@ -46,6 +47,9 @@ type Keeper interface {
 	LoadTasks() (StorageTasks, error)
 	SaveTask(task models.Task) error
 	DeleteTask(id int) error
+	StartTaskTracking(models.TimeEntry) error
+	StopTaskTracking(models.TimeEntry) error
+	GetUserTaskSummary(int, time.Time, time.Time, string, time.Time) ([]models.TaskSummary, error)
 
 	Ping() bool
 	Close() bool
@@ -279,6 +283,33 @@ func (s *MemoryStorage) DeleteTask(id int) error {
 	delete(s.tasks, id)
 
 	return nil
+}
+
+func (s *MemoryStorage) StartTaskTracking(entry models.TimeEntry) error {
+	err := s.keeper.StartTaskTracking(entry)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *MemoryStorage) StopTaskTracking(entry models.TimeEntry) error {
+	err := s.keeper.StopTaskTracking(entry)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *MemoryStorage) GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error) {
+	summary, err := s.keeper.GetUserTaskSummary(userID, startDate, endDate, userTimezone, defaultEndTime)
+	if err != nil {
+		return nil, err
+	}
+
+	return summary, nil
 }
 
 // func (s *MemoryStorage) GetUser(k string) (models.User, error) {

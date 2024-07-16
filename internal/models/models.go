@@ -8,7 +8,7 @@ type Key string
 
 // User представляет структуру данных пользователя
 type User struct {
-	UUID           string    `db:"id" json:"id"`
+	UUID           int       `db:"id" json:"id"`
 	PassportSerie  int       `db:"passportSerie" json:"passportSerie"`
 	PassportNumber int       `db:"passportNumber" json:"passportNumber"`
 	Surname        string    `db:"surname" json:"surname"`
