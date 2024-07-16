@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -438,6 +439,156 @@ func (kp *BDKeeper) DeleteTask(id int) error {
 
 	kp.log.Info("Task deleted successfully", zap.Int("id", id))
 	return nil
+}
+
+func (bd *BDKeeper) StartTaskTracking(entry models.TimeEntry) error {
+	// Преобразование времени с учетом часового пояса пользователя
+	location, err := time.LoadLocation(entry.UserTimezone)
+	if err != nil {
+		bd.log.Info("error loading user timezone: ", zap.Error(err))
+		return err
+	}
+	startTime := time.Now().In(location)
+
+	// Проверка наличия активной записи для пользователя и задачи на указанную дату
+	var existingTaskID int
+	query := `
+		SELECT id FROM user_tasks
+		WHERE user_id = $1 AND task_id = $2 AND event_date = $3 AND end_time IS NULL
+	`
+	err = bd.conn.QueryRow(query, entry.UserID, entry.TaskID, entry.EventDate).Scan(&existingTaskID)
+	if err != nil && err != sql.ErrNoRows {
+		bd.log.Info("error checking existing task in database: ", zap.Error(err))
+		return err
+	}
+
+	if existingTaskID != 0 {
+		return fmt.Errorf("task tracking is already in progress for user %d on task %d for date %s", entry.UserID, entry.TaskID, entry.EventDate)
+	}
+
+	// Вставка новой записи в таблицу user_tasks
+	insertQuery := `
+		INSERT INTO user_tasks (user_id, task_id, event_date, start_time)
+		VALUES ($1, $2, $3, $4)
+	`
+	_, err = bd.conn.Exec(insertQuery, entry.UserID, entry.TaskID, entry.EventDate, startTime)
+	if err != nil {
+		bd.log.Info("error saving task tracking to database: ", zap.Error(err))
+		return err
+	}
+
+	bd.log.Info("Task tracking started successfully for user: ", zap.Int("userID", entry.UserID), zap.Int("taskID", entry.TaskID))
+	return nil
+}
+
+func (bd *BDKeeper) StopTaskTracking(entry models.TimeEntry) error {
+	// Преобразование времени с учетом часового пояса пользователя
+	location, err := time.LoadLocation(entry.UserTimezone)
+	if err != nil {
+		bd.log.Info("error loading user timezone: ", zap.Error(err))
+		return err
+	}
+	endTime := time.Now().In(location)
+
+	// Проверка наличия активной записи для пользователя и задачи на указанную дату
+	var id int
+	query := `
+        SELECT id FROM user_tasks
+        WHERE user_id = $1 AND task_id = $2 AND event_date = $3 AND end_time IS NULL
+    `
+	rows, err := bd.conn.Query(query, entry.UserID, entry.TaskID, entry.EventDate)
+	if err != nil {
+		bd.log.Info("error checking existing task in database: ", zap.Error(err))
+		return err
+	}
+	defer rows.Close()
+
+	var found bool
+	for rows.Next() {
+		err = rows.Scan(&id)
+		if err != nil {
+			bd.log.Info("error scanning task id: ", zap.Error(err))
+			return err
+		}
+		found = true
+	}
+
+	if !found {
+		return fmt.Errorf("no active task tracking found for user %d on task %d for date %s", entry.UserID, entry.TaskID, entry.EventDate)
+	}
+
+	// Обновление записи с завершением времени
+	updateQuery := `
+        UPDATE user_tasks
+        SET end_time = $1
+        WHERE id = $2
+    `
+	_, err = bd.conn.Exec(updateQuery, endTime, id)
+	if err != nil {
+		bd.log.Info("error updating task tracking in database: ", zap.Error(err))
+		return err
+	}
+
+	bd.log.Info("Task tracking stopped successfully for user: ", zap.Int("userID", entry.UserID), zap.Int("taskID", entry.TaskID))
+	return nil
+}
+
+func (bd *BDKeeper) GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error) {
+	location, err := time.LoadLocation(userTimezone)
+	if err != nil {
+		bd.log.Info("error loading user timezone: ", zap.Error(err))
+		return nil, err
+	}
+
+	query := `
+		SELECT task_id, start_time, end_time
+		FROM user_tasks
+		WHERE user_id = $1 AND event_date BETWEEN $2 AND $3
+	`
+	rows, err := bd.conn.Query(query, userID, startDate, endDate)
+	if err != nil {
+		bd.log.Info("error querying task summary: ", zap.Error(err))
+		return nil, err
+	}
+	defer rows.Close()
+
+	taskTimeMap := make(map[int]time.Duration)
+	for rows.Next() {
+		var taskID int
+		var startTime, endTime time.Time
+		err = rows.Scan(&taskID, &startTime, &endTime)
+		if err != nil {
+			bd.log.Info("error scanning task summary: ", zap.Error(err))
+			return nil, err
+		}
+
+		// Если end_time не заполнено, использовать default_end_time или конец текущего дня
+		if endTime.IsZero() {
+			if !defaultEndTime.IsZero() {
+				endTime = defaultEndTime
+			} else {
+				endTime = time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 23, 59, 59, 0, location)
+			}
+		}
+
+		duration := endTime.Sub(startTime)
+		taskTimeMap[taskID] += duration
+	}
+
+	var taskSummaries []models.TaskSummary
+	for taskID, totalTime := range taskTimeMap {
+		taskSummaries = append(taskSummaries, models.TaskSummary{
+			TaskID:    taskID,
+			TotalTime: totalTime,
+		})
+	}
+
+	// Сортировка по убыванию времени
+	sort.Slice(taskSummaries, func(i, j int) bool {
+		return taskSummaries[i].TotalTime > taskSummaries[j].TotalTime
+	})
+
+	return taskSummaries, nil
 }
 
 func (kp *BDKeeper) Ping() bool {

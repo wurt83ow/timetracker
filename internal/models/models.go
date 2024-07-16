@@ -40,12 +40,11 @@ type ResponseUser struct {
 
 // TimeEntry представляет структуру записи времени
 type TimeEntry struct {
-	ID         int       `db:"id" json:"id"`
-	UserID     int       `db:"user_id" json:"user_id"`
-	Task       string    `db:"task" json:"task"`
-	StartTime  time.Time `db:"start_time" json:"start_time"`
-	EndTime    time.Time `db:"end_time" json:"end_time"`
-	TotalHours float64   `db:"total_hours" json:"total_hours"`
+	EventDate      time.Time `json:"event_date"`
+	UserID         int       `db:"user_id" json:"user_id"`
+	TaskID         int       `db:"task" json:"task"`
+	UserTimezone   string    `json:"user_timezone"`
+	DefaultEndTime time.Time `json:"default_end_time"`
 }
 
 // ExtUserData представляет структуру параметров пользователей
@@ -89,4 +88,10 @@ type Task struct {
 type TaskFilter struct {
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
+}
+
+// TaskSummary представляет структуру для возврата данных о трудозатратах
+type TaskSummary struct {
+	TaskID    int           `json:"task_id"`
+	TotalTime time.Duration `json:"total_time"`
 }
