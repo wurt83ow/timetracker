@@ -2,13 +2,13 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/google/uuid"
 	authz "github.com/wurt83ow/timetracker/internal/authorization"
 	"github.com/wurt83ow/timetracker/internal/models"
 	"github.com/wurt83ow/timetracker/internal/storage"
@@ -37,6 +37,7 @@ type Storage interface {
 	StartTaskTracking(models.TimeEntry) error
 	StopTaskTracking(models.TimeEntry) error
 	GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error)
+	GetUser(int, int) (models.User, error)
 }
 
 type Options interface {
@@ -99,42 +100,57 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 	if err := dec.Decode(&regReq); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest) // code 400
-
 		return
 	}
 
-	if len(regReq.Email) == 0 || len(regReq.Password) == 0 {
+	if len(regReq.PassportNumber) == 0 || len(regReq.Password) == 0 {
 		h.log.Info("login or password was not received")
 		w.WriteHeader(http.StatusBadRequest) // code 400
-	}
-
-	_, err := h.storage.GetUser(regReq.Email)
-	if err == nil {
-		// login is already taken
-		h.log.Info("login is already taken: ", zap.Error(err))
-		w.WriteHeader(http.StatusConflict) // 409
 		return
 	}
 
-	Hash := h.authz.GetHash(regReq.Email, regReq.Password)
-
-	// save the user to the storage
-	dataUser := models.DataUser{UUID: uuid.New().String(), Email: regReq.Email, Hash: Hash, Name: regReq.Email}
-
-	_, err = h.storage.InsertUser(regReq.Email, dataUser)
+	passportSerie, passportNumber, err := h.parsePassportData(regReq.PassportNumber)
 	if err != nil {
-		// login is already taken
+		h.log.Info(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	_, err = h.storage.GetUser(passportSerie, passportNumber)
+	if err == nil {
+		// пользователь уже существует
+		h.log.Info("login is already taken")
+		w.WriteHeader(http.StatusConflict) // 409
+		return
+	} else if err != storage.ErrNotFound {
+		h.log.Info("error checking user existence: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError) // code 500
+		return
+	}
+
+	Hash := h.authz.GetHash(regReq.PassportNumber, regReq.Password)
+
+	userData := models.User{
+		PassportSerie:  passportSerie,
+		PassportNumber: passportNumber,
+		DefaultEndTime: time.Now(),
+		LastCheckedAt:  time.Now(),
+		Hash:           Hash,
+	}
+
+	err = h.storage.InsertUser(userData)
+	if err != nil {
 		if err == storage.ErrConflict {
 			h.log.Info("login is already taken: ", zap.Error(err))
 			w.WriteHeader(http.StatusConflict) //code 409
 		} else {
 			h.log.Info("error insert user to storage: ", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError) // code 500
-			return
 		}
+		return
 	}
 
-	freshToken := h.authz.CreateJWTTokenForUser(dataUser.UUID)
+	freshToken := h.authz.CreateJWTTokenForUser(regReq.PassportNumber)
 	http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
 	http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
 
@@ -197,45 +213,46 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 // 	h.log.Info("incorrect login/password pair, request status 401: ", metod)
 // }
 
+func (h *BaseController) parsePassportData(passportNumber string) (int, int, error) {
+	parts := strings.Split(passportNumber, " ")
+	if len(parts) != 2 {
+		return 0, 0, errors.New("invalid passport number format")
+	}
+
+	passportSerie, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, errors.New("invalid passport series format")
+	}
+
+	passportNumberInt, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, errors.New("invalid passport number format")
+	}
+
+	return passportSerie, passportNumberInt, nil
+}
+
 // @Summary Add user
 // @Description Add a new user to the database
 // @Tags User
 // @Accept json
 // @Produce json
-// @Param user body models.User true "User Info"
+// @Param user body models.RequestUser true "User Info"
 // @Success 200 {string} string "User added successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/user [post]
 func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
-	type RequestData struct {
-		PassportNumber string `json:"passportNumber"`
-	}
-
-	var reqData RequestData
+	var reqData models.RequestUser
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	parts := strings.Split(reqData.PassportNumber, " ")
-	if len(parts) != 2 {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	passportSerie, err := strconv.Atoi(parts[0])
+	passportSerie, passportNumber, err := h.parsePassportData(reqData.PassportNumber)
 	if err != nil {
-		h.log.Info("invalid passport series format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	passportNumber, err := strconv.Atoi(parts[1])
-	if err != nil {
-		h.log.Info("invalid passport number format")
+		h.log.Info(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}

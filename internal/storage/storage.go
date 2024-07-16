@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wurt83ow/timetracker/internal/models"
@@ -16,6 +17,7 @@ var (
 	ErrConflict     = errors.New("data conflict")
 	ErrInsufficient = errors.New("insufficient funds")
 	ErrNotFound     = errors.New("user not found")
+	 
 )
 
 type (
@@ -28,8 +30,8 @@ type Log interface {
 }
 
 type MemoryStorage struct {
-	// omx    sync.RWMutex
-	// umx    sync.RWMutex
+	omx    sync.RWMutex
+	umx    sync.RWMutex
 	users  StorageUsers
 	tasks  StorageTasks
 	keeper Keeper
@@ -312,17 +314,18 @@ func (s *MemoryStorage) GetUserTaskSummary(userID int, startDate, endDate time.T
 	return summary, nil
 }
 
-// func (s *MemoryStorage) GetUser(k string) (models.User, error) {
-// 	s.umx.RLock()
-// 	defer s.umx.RUnlock()
+func (s *MemoryStorage) GetUser(passportSerie, passportNumber int) (models.User, error) {
+	s.umx.RLock()
+	defer s.umx.RUnlock()
 
-// 	v, exists := s.users[k]
-// 	if !exists {
-// 		return models.User{}, errors.New("value with such key doesn't exist")
-// 	}
+	key := fmt.Sprintf("%d %d", passportSerie, passportNumber)
+	v, exists := s.users[key]
+	if !exists {
+		return models.User{}, errors.New("value with such key doesn't exist")
+	}
 
-// 	return v, nil
-// }
+	return v, nil
+}
 
 // func (s *MemoryStorage) InsertUser(k string,
 // 	v models.User,

@@ -22,6 +22,11 @@ type User struct {
 	LastCheckedAt  time.Time `db:"last_checked_at" json:"last_checked_at"`
 }
 
+type RequestUser struct {
+	PassportNumber string `json:"passportNumber"`
+	Password       string `json:"password"`
+}
+
 // TimeEntry представляет структуру записи времени
 type TimeEntry struct {
 	EventDate      time.Time `json:"event_date"`
