@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
+	httpSwagger "github.com/swaggo/http-swagger"
+	_ "github.com/wurt83ow/timetracker/docs" // подключение сгенерированных Swagger файлов
 	authz "github.com/wurt83ow/timetracker/internal/authorization"
 	"github.com/wurt83ow/timetracker/internal/bdkeeper"
 	"github.com/wurt83ow/timetracker/internal/config"
@@ -67,9 +69,11 @@ func (server *Server) Serve() {
 	r.Use(reqLog.RequestLogger)
 	r.Mount("/", basecontr.Route())
 
+	// Добавление маршрута для Swagger UI
+	r.Get("/swagger/*", httpSwagger.WrapHandler)
+
 	// configure and start the server
 	startServer(r, option.RunAddr())
-
 }
 
 func initializeKeeper(dataBaseDSN func() string, logger *logger.Logger, userUpdateInterval func() string) *bdkeeper.BDKeeper {
@@ -122,6 +126,7 @@ func startServer(router chi.Router, address string) {
 		log.Fatalln(err)
 	}
 }
+
 func (server *Server) Shutdown() {
 	log.Printf("server stopped")
 

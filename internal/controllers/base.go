@@ -94,6 +94,17 @@ func (h *BaseController) Route() *chi.Mux {
 	return r
 }
 
+// @Summary Register user
+// @Description Register a new user
+// @Tags User
+// @Accept json
+// @Produce json
+// @Param user body models.RequestUser true "User Info"
+// @Success 200 {string} string "User registered successfully"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 409 {string} string "User already exists"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/user/register [post]
 func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 	regReq := new(models.RequestUser)
 	dec := json.NewDecoder(r.Body)
@@ -160,6 +171,17 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 	h.log.Info("sending HTTP 200 response")
 }
 
+// @Summary Login user
+// @Description Login a user and return a JWT token
+// @Tags User
+// @Accept json
+// @Produce json
+// @Param user body models.RequestUser true "User Info"
+// @Success 200 {string} string "User logged in successfully"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 401 {string} string "Unauthorized"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/user/login [post]
 func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
 	metod := zap.String("method", r.Method)
 
@@ -219,25 +241,6 @@ func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
 	// incorrect login/password pair
 	w.WriteHeader(http.StatusUnauthorized) //code 401
 	h.log.Info("incorrect login/password pair, request status 401: ", metod)
-}
-
-func (h *BaseController) parsePassportData(passportNumber string) (int, int, error) {
-	parts := strings.Split(passportNumber, " ")
-	if len(parts) != 2 {
-		return 0, 0, errors.New("invalid passport number format")
-	}
-
-	passportSerie, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, 0, errors.New("invalid passport series format")
-	}
-
-	passportNumberInt, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0, 0, errors.New("invalid passport number format")
-	}
-
-	return passportSerie, passportNumberInt, nil
 }
 
 // @Summary Add user
@@ -371,7 +374,7 @@ func (h *BaseController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 // @Param name query string false "Name"
 // @Param patronymic query string false "Patronymic"
 // @Param address query string false "Address"
-// @Param timezone query string false "Timezone" 
+// @Param timezone query string false "Timezone"
 // @Param limit query int false "Limit"
 // @Param offset query int false "Offset"
 // @Success 200 {array} models.User "List of users"
@@ -604,24 +607,20 @@ func (h *BaseController) GetTasks(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *BaseController) GetPing(w http.ResponseWriter, r *http.Request) {
-	if !h.storage.GetBaseConnection() {
-		h.log.Info("got status internal server error")
-		w.WriteHeader(http.StatusInternalServerError) // 500
-		return
-	}
-
-	w.WriteHeader(http.StatusOK) // 200
-	h.log.Info("sending HTTP 200 response")
-}
-
+// @Summary Start task tracking
+// @Description Start tracking time for a specific task
+// @Tags Task
+// @Accept json
+// @Produce json
+// @Param task body models.RequestData true "Task Info"
+// @Success 200 {string} string "Task tracking started successfully"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 404 {string} string "User not found"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/task/start [post]
 func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Request) {
-	type RequestData struct {
-		PassportNumber string `json:"passportNumber"`
-		TaskID         int    `json:"taskId"`
-	}
 
-	var reqData RequestData
+	var reqData models.RequestData
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
@@ -693,13 +692,20 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 	h.log.Info("Task tracking started successfully")
 }
 
+// @Summary Stop task tracking
+// @Description Stop tracking time for a specific task
+// @Tags Task
+// @Accept json
+// @Produce json
+// @Param task body models.RequestData true "Task Info"
+// @Success 200 {string} string "Task tracking stopped successfully"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 404 {string} string "User not found"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/task/stop [post]
 func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request) {
-	type RequestData struct {
-		PassportNumber string `json:"passportNumber"`
-		TaskID         int    `json:"taskId"`
-	}
 
-	var reqData RequestData
+	var reqData models.RequestData
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
@@ -771,14 +777,20 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 	h.log.Info("Task tracking stopped successfully")
 }
 
+// @Summary Get user task summary
+// @Description Get a summary of tasks for a user within a date range
+// @Tags Task
+// @Accept json
+// @Produce json
+// @Param summary body models.RequestDataTask true "Summary Info"
+// @Success 200 {array} models.TaskSummary "User task summary"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 404 {string} string "User not found"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /api/task/summary [post]
 func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Request) {
-	type RequestData struct {
-		PassportNumber string `json:"passportNumber"`
-		StartDate      string `json:"startDate"`
-		EndDate        string `json:"endDate"`
-	}
 
-	var reqData RequestData
+	var reqData models.RequestDataTask
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
@@ -849,4 +861,41 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 		h.log.Info("error encoding response", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+}
+
+// @Summary Check service health
+// @Description Check if the service is running and can connect to the database
+// @Tags Health
+// @Produce json
+// @Success 200 {string} string "Service is running"
+// @Failure 500 {string} string "Internal Server Error"
+// @Router /ping [get]
+func (h *BaseController) GetPing(w http.ResponseWriter, r *http.Request) {
+	if !h.storage.GetBaseConnection() {
+		h.log.Info("got status internal server error")
+		w.WriteHeader(http.StatusInternalServerError) // 500
+		return
+	}
+
+	w.WriteHeader(http.StatusOK) // 200
+	h.log.Info("sending HTTP 200 response")
+}
+
+func (h *BaseController) parsePassportData(passportNumber string) (int, int, error) {
+	parts := strings.Split(passportNumber, " ")
+	if len(parts) != 2 {
+		return 0, 0, errors.New("invalid passport number format")
+	}
+
+	passportSerie, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, errors.New("invalid passport series format")
+	}
+
+	passportNumberInt, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, errors.New("invalid passport number format")
+	}
+
+	return passportSerie, passportNumberInt, nil
 }

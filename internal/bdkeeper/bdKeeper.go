@@ -109,7 +109,7 @@ func (bd *BDKeeper) SaveUser(key string, user models.User) error {
 		user.Patronymic,
 		user.Address,
 		user.DefaultEndTime,
-		user.Timezone,		
+		user.Timezone,
 		user.Hash,
 		user.LastCheckedAt,
 	)
@@ -201,7 +201,7 @@ func (bd *BDKeeper) UpdateUser(user models.User) error {
 		user.Patronymic,
 		user.Address,
 		user.DefaultEndTime,
-		user.Timezone,		
+		user.Timezone,
 		user.Hash,
 		user.LastCheckedAt,
 	)
@@ -260,7 +260,7 @@ func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 			&m.Patronymic,
 			&m.Address,
 			&m.DefaultEndTime,
-			&m.Timezone,			
+			&m.Timezone,
 			&m.Hash,
 			&m.LastCheckedAt,
 		)
@@ -576,7 +576,7 @@ func (bd *BDKeeper) GetUserTaskSummary(userID int, startDate, endDate time.Time,
 	for taskID, totalTime := range taskTimeMap {
 		taskSummaries = append(taskSummaries, models.TaskSummary{
 			TaskID:    taskID,
-			TotalTime: totalTime,
+			TotalTime: time.Duration.String(totalTime),
 		})
 	}
 

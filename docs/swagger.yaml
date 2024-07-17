@@ -1,0 +1,561 @@
+definitions:
+  models.RequestData:
+    properties:
+      passportNumber:
+        type: string
+      taskId:
+        type: integer
+    type: object
+  models.RequestDataTask:
+    properties:
+      endDate:
+        type: string
+      passportNumber:
+        type: string
+      startDate:
+        type: string
+    type: object
+  models.RequestUser:
+    properties:
+      passportNumber:
+        type: string
+      password:
+        type: string
+    type: object
+  models.Task:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  models.TaskSummary:
+    properties:
+      task_id:
+        type: integer
+      total_time:
+        type: string
+    type: object
+  models.User:
+    properties:
+      address:
+        type: string
+      default_end_time:
+        type: string
+      id:
+        type: integer
+      last_checked_at:
+        type: string
+      name:
+        type: string
+      passportNumber:
+        type: integer
+      passportSerie:
+        type: integer
+      password_hash:
+        items:
+          type: integer
+        type: array
+      patronymic:
+        type: string
+      surname:
+        type: string
+      timezone:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /api/task:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a task from the database
+      parameters:
+      - description: Task ID
+        in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Delete task
+      tags:
+      - Tasks
+    post:
+      consumes:
+      - application/json
+      description: Add a new task to the database
+      parameters:
+      - description: Task Info
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/models.Task'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task added successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Add task
+      tags:
+      - Tasks
+    put:
+      consumes:
+      - application/json
+      description: Update a task in the database
+      parameters:
+      - description: Task Info
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/models.Task'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task updated successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Update task
+      tags:
+      - Tasks
+  /api/task/start:
+    post:
+      consumes:
+      - application/json
+      description: Start tracking time for a specific task
+      parameters:
+      - description: Task Info
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/models.RequestData'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task tracking started successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: User not found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Start task tracking
+      tags:
+      - Task
+  /api/task/stop:
+    post:
+      consumes:
+      - application/json
+      description: Stop tracking time for a specific task
+      parameters:
+      - description: Task Info
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/models.RequestData'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task tracking stopped successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: User not found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Stop task tracking
+      tags:
+      - Task
+  /api/task/summary:
+    post:
+      consumes:
+      - application/json
+      description: Get a summary of tasks for a user within a date range
+      parameters:
+      - description: Summary Info
+        in: body
+        name: summary
+        required: true
+        schema:
+          $ref: '#/definitions/models.RequestDataTask'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User task summary
+          schema:
+            items:
+              $ref: '#/definitions/models.TaskSummary'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: User not found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get user task summary
+      tags:
+      - Task
+  /api/tasks:
+    get:
+      consumes:
+      - application/json
+      description: Get tasks from the database
+      parameters:
+      - description: Name
+        in: query
+        name: name
+        type: string
+      - description: Description
+        in: query
+        name: description
+        type: string
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of tasks
+          schema:
+            items:
+              $ref: '#/definitions/models.Task'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get tasks
+      tags:
+      - Tasks
+  /api/user:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a user from the database
+      parameters:
+      - description: Passport Series
+        in: query
+        name: passportSerie
+        required: true
+        type: integer
+      - description: Passport Number
+        in: query
+        name: passportNumber
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Delete user
+      tags:
+      - User
+    post:
+      consumes:
+      - application/json
+      description: Add a new user to the database
+      parameters:
+      - description: User Info
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.RequestUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User added successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Add user
+      tags:
+      - User
+    put:
+      consumes:
+      - application/json
+      description: Update a user in the database
+      parameters:
+      - description: User Info
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User updated successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Update user
+      tags:
+      - User
+  /api/user/login:
+    post:
+      consumes:
+      - application/json
+      description: Login a user and return a JWT token
+      parameters:
+      - description: User Info
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.RequestUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User logged in successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Login user
+      tags:
+      - User
+  /api/user/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user
+      parameters:
+      - description: User Info
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.RequestUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User registered successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "409":
+          description: User already exists
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Register user
+      tags:
+      - User
+  /api/users:
+    get:
+      consumes:
+      - application/json
+      description: Get users from the database
+      parameters:
+      - description: Passport Series
+        in: query
+        name: passportSerie
+        type: integer
+      - description: Passport Number
+        in: query
+        name: passportNumber
+        type: integer
+      - description: Surname
+        in: query
+        name: surname
+        type: string
+      - description: Name
+        in: query
+        name: name
+        type: string
+      - description: Patronymic
+        in: query
+        name: patronymic
+        type: string
+      - description: Address
+        in: query
+        name: address
+        type: string
+      - description: Timezone
+        in: query
+        name: timezone
+        type: string
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of users
+          schema:
+            items:
+              $ref: '#/definitions/models.User'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get users
+      tags:
+      - User
+  /ping:
+    get:
+      description: Check if the service is running and can connect to the database
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is running
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Check service health
+      tags:
+      - Health
+swagger: "2.0"

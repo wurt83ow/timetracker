@@ -77,6 +77,18 @@ type TaskFilter struct {
 
 // TaskSummary представляет структуру для возврата данных о трудозатратах
 type TaskSummary struct {
-	TaskID    int           `json:"task_id"`
-	TotalTime time.Duration `json:"total_time"`
+	TaskID    int    `json:"task_id"`
+	TotalTime string `json:"total_time"`
+}
+
+// RequestData defines the structure for the start and stop task tracking requests
+type RequestData struct {
+	PassportNumber string `json:"passportNumber"`
+	TaskID         int    `json:"taskId"`
+}
+
+type RequestDataTask struct {
+	PassportNumber string `json:"passportNumber"`
+	StartDate      string `json:"startDate"`
+	EndDate        string `json:"endDate"`
 }
