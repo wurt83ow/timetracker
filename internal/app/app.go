@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi"
 	httpSwagger "github.com/swaggo/http-swagger"
 	_ "github.com/wurt83ow/timetracker/docs" // подключение сгенерированных Swagger файлов
+	"github.com/wurt83ow/timetracker/internal/apiservice"
 	authz "github.com/wurt83ow/timetracker/internal/authorization"
 	"github.com/wurt83ow/timetracker/internal/bdkeeper"
 	"github.com/wurt83ow/timetracker/internal/config"
@@ -20,6 +21,7 @@ import (
 	"github.com/wurt83ow/timetracker/internal/logger"
 	"github.com/wurt83ow/timetracker/internal/middleware"
 	"github.com/wurt83ow/timetracker/internal/storage"
+	"github.com/wurt83ow/timetracker/internal/workerpool"
 	"go.uber.org/zap"
 )
 
@@ -32,6 +34,11 @@ func NewServer(ctx context.Context) *Server {
 	server := new(Server)
 	server.ctx = ctx
 	return server
+}
+
+// !!! Заменить  на .dev и conf
+func ApiSystemAddress() string {
+	return ":8081"
 }
 
 func (server *Server) Serve() {
@@ -61,6 +68,11 @@ func (server *Server) Serve() {
 		nLogger.Debug("Failed to initialize storage")
 	}
 
+	// create a new workerpool for concurrency task processing
+	var allTask []*workerpool.Task
+	pool := workerpool.NewPool(allTask, option.Concurrency,
+		nLogger, option.TaskExecutionInterval)
+
 	// create a new NewJWTAuthz for user authorization
 	authz := authz.NewJWTAuthz(option.JWTSigningKey(), nLogger)
 
@@ -69,6 +81,17 @@ func (server *Server) Serve() {
 
 	// get a middleware for logging requests
 	reqLog := middleware.NewReqLog(nLogger)
+
+	// start the worker pool in the background
+	go pool.RunBackground()
+
+	// create a new controller for creating outgoing requests
+	extcontr := controllers.NewExtController(memoryStorage,
+		ApiSystemAddress, nLogger)
+
+	apiServise := apiservice.NewApiService(extcontr, pool, memoryStorage,
+		nLogger, option.TaskExecutionInterval)
+	apiServise.Start()
 
 	// create router and mount routes
 	r := chi.NewRouter()

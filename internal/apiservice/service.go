@@ -1,4 +1,4 @@
-package accruel
+package apiservice
 
 import (
 	"context"
@@ -88,7 +88,7 @@ func (a *ApiService) UpdateUsers(ctx context.Context) {
 
 	dmx.RLock()
 	defer dmx.RUnlock()
-
+	 
 	for {
 		select {
 		case <-ctx.Done():
@@ -99,6 +99,7 @@ func (a *ApiService) UpdateUsers(ctx context.Context) {
 				result = append(result, j)
 			}
 		case <-t.C:
+			 
 			users, err := a.storage.GetNonUpdateUsers()
 			if err != nil {
 				return
@@ -130,6 +131,7 @@ func (a *ApiService) CreateUsersTask(users []models.ExtUserData) {
 	for _, user := range users {
 
 		task = workerpool.NewTask(func(data interface{}) error {
+			 
 			usr, ok := data.(models.ExtUserData)
 			if ok { // type assertion failed
 				usrinfo, err := a.external.GetUserInfo(usr.PassportSerie, usr.PassportNumber)

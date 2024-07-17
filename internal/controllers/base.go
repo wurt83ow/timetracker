@@ -147,10 +147,6 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 		h.log.Info("login is already taken")
 		w.WriteHeader(http.StatusConflict) // 409
 		return
-	} else if err != storage.ErrNotFound {
-		h.log.Info("error checking user existence: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError) // code 500
-		return
 	}
 
 	Hash := h.authz.GetHash(regReq.PassportNumber, regReq.Password)
@@ -221,39 +217,27 @@ func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if bytes.Equal(user.Hash, h.authz.GetHash(rb.PassportNumber, rb.Password)) {
-		freshToken := h.authz.CreateJWTTokenForUser(rb.PassportNumber)
-		http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
-		http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
-
-		w.Header().Set("Authorization", freshToken)
-		err := json.NewEncoder(w).Encode(models.ResponseUser{
-			Response: "success",
-		})
-		if err != nil {
-			// internal server error
-			w.WriteHeader(http.StatusInternalServerError) //code 500
-			h.log.Info("internal server error, request status 500: ", metod)
-			return
-		}
-
+	if !bytes.Equal(user.Hash, h.authz.GetHash(rb.PassportNumber, rb.Password)) {
+		// incorrect login/password pair
+		w.WriteHeader(http.StatusUnauthorized) //code 401
+		h.log.Info("incorrect login/password pair, request status 401: ", metod)
 		return
 	}
 
-	err = json.NewEncoder(w).Encode(models.ResponseUser{
-		Response: "incorrect passport/password",
-	})
+	freshToken := h.authz.CreateJWTTokenForUser(rb.PassportNumber)
+	http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
+	http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
 
+	w.Header().Set("Authorization", freshToken)
+	err = json.NewEncoder(w).Encode(models.ResponseUser{
+		Response: "success",
+	})
 	if err != nil {
 		// internal server error
 		w.WriteHeader(http.StatusInternalServerError) //code 500
 		h.log.Info("internal server error, request status 500: ", metod)
 		return
 	}
-
-	// incorrect login/password pair
-	w.WriteHeader(http.StatusUnauthorized) //code 401
-	h.log.Info("incorrect login/password pair, request status 401: ", metod)
 }
 
 // @Summary Add user

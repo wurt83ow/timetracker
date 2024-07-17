@@ -36,6 +36,7 @@ func (c *ExtController) GetUserInfo(passportSerie int, passportNumber int) (mode
 
 	url := fmt.Sprintf("%sinfo?passportSerie=%d&passportNumber=%d", addr, passportSerie, passportNumber)
 
+	fmt.Println(url)
 	resp, err := http.Get(url)
 	if err != nil {
 		c.log.Info("unable to access user info service, check that it is running: ", zap.Error(err))

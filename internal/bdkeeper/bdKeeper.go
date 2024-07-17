@@ -3,6 +3,7 @@ package bdkeeper
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"sort"
@@ -100,6 +101,10 @@ func (kp *BDKeeper) Close() bool {
 }
 
 func (bd *BDKeeper) SaveUser(key string, user models.User) error {
+
+	// Преобразование []byte в строку
+	passwordHash := hex.EncodeToString(user.Hash)
+
 	query := `
         INSERT INTO Users (
             passportSerie, passportNumber, surname, name, patronymic, address,
@@ -120,7 +125,7 @@ func (bd *BDKeeper) SaveUser(key string, user models.User) error {
 		user.Address,
 		user.DefaultEndTime,
 		user.Timezone,
-		user.Hash,
+		passwordHash,
 		user.LastCheckedAt,
 	)
 	if err != nil {
