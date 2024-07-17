@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/go-chi/chi"
@@ -24,13 +26,11 @@ import (
 type Server struct {
 	srv *http.Server
 	ctx context.Context
-	// db  *pgxpool.Pool
 }
 
 func NewServer(ctx context.Context) *Server {
 	server := new(Server)
 	server.ctx = ctx
-
 	return server
 }
 
@@ -50,10 +50,16 @@ func (server *Server) Serve() {
 
 	// initialize the keeper instance
 	keeper := initializeKeeper(option.DataBaseDSN, nLogger, option.UserUpdateInterval)
+	if keeper == nil {
+		nLogger.Debug("Failed to initialize keeper")
+	}
 	defer keeper.Close()
 
 	// initialize the storage instance
 	memoryStorage := initializeStorage(keeper, nLogger)
+	if memoryStorage == nil {
+		nLogger.Debug("Failed to initialize storage")
+	}
 
 	// create a new NewJWTAuthz for user authorization
 	authz := authz.NewJWTAuthz(option.JWTSigningKey(), nLogger)
@@ -73,11 +79,22 @@ func (server *Server) Serve() {
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	// configure and start the server
-	startServer(r, option.RunAddr())
+	server.srv = startServer(r, option.RunAddr())
+
+	// Создаем канал для получения сигналов прерывания (например, CTRL+C)
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, os.Interrupt)
+
+	// Блокируем выполнение до получения сигнала
+	<-stopChan
+
+	// Выполняем корректное завершение сервера
+	server.Shutdown()
 }
 
 func initializeKeeper(dataBaseDSN func() string, logger *logger.Logger, userUpdateInterval func() string) *bdkeeper.BDKeeper {
 	if dataBaseDSN() == "" {
+		logger.Warn("DataBaseDSN is empty")
 		return nil
 	}
 
@@ -86,6 +103,7 @@ func initializeKeeper(dataBaseDSN func() string, logger *logger.Logger, userUpda
 
 func initializeStorage(keeper storage.Keeper, logger *logger.Logger) *storage.MemoryStorage {
 	if keeper == nil {
+		logger.Warn("Keeper is nil, cannot initialize storage")
 		return nil
 	}
 
@@ -98,7 +116,7 @@ func initializeBaseController(storage *storage.MemoryStorage, option *config.Opt
 	return controllers.NewBaseController(storage, option, logger, authz)
 }
 
-func startServer(router chi.Router, address string) {
+func startServer(router chi.Router, address string) *http.Server {
 	const (
 		oneMegabyte = 1 << 20
 		readTimeout = 3 * time.Second
@@ -121,10 +139,14 @@ func startServer(router chi.Router, address string) {
 		ConnContext:                  nil,
 	}
 
-	err := server.ListenAndServe()
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalln(err)
-	}
+	go func() {
+		err := server.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalln(err)
+		}
+	}()
+
+	return server
 }
 
 func (server *Server) Shutdown() {
@@ -135,10 +157,11 @@ func (server *Server) Shutdown() {
 
 	defer cancel()
 
-	if err := server.srv.Shutdown(ctxShutDown); err != nil {
-		if !errors.Is(err, http.ErrServerClosed) {
-			//nolint:gocritic
-			log.Fatalf("server Shutdown Failed:%s", err)
+	if server.srv != nil {
+		if err := server.srv.Shutdown(ctxShutDown); err != nil {
+			if !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("server Shutdown Failed:%s", err)
+			}
 		}
 	}
 

@@ -33,35 +33,33 @@ func NewBDKeeper(dsn func() string, log Log, userUpdateInterval func() string) *
 	addr := dsn()
 	if addr == "" {
 		log.Info("database dsn is empty")
-
 		return nil
 	}
 
-	conn, err := sql.Open("pgx", dsn())
+	conn, err := sql.Open("pgx", addr)
 	if err != nil {
-		log.Info("Unable to connection to database: ", zap.Error(err))
-
+		log.Info("Unable to connect to database: ", zap.Error(err))
 		return nil
 	}
 
 	driver, err := postgres.WithInstance(conn, new(postgres.Config))
 	if err != nil {
-		log.Info("error getting driver: ", zap.Error(err))
-
+		log.Info("Error getting driver: ", zap.Error(err))
 		return nil
 	}
 
 	dir, err := os.Getwd()
 	if err != nil {
-		log.Info("error getting current directory: ", zap.Error(err))
+		log.Info("Error getting current directory: ", zap.Error(err))
 	}
 
 	// fix error test path
 	mp := dir + "/migrations"
-
 	var path string
 	if _, err := os.Stat(mp); err != nil {
 		path = "../../"
+	} else {
+		path = dir + "/"
 	}
 
 	m, err := migrate.NewWithDatabaseInstance(
@@ -74,7 +72,7 @@ func NewBDKeeper(dsn func() string, log Log, userUpdateInterval func() string) *
 	}
 
 	err = m.Up()
-	if err != nil {
+	if err != nil && err != migrate.ErrNoChange {
 		log.Info("Error while performing migration: ", zap.Error(err))
 		return nil
 	}
@@ -88,20 +86,33 @@ func NewBDKeeper(dsn func() string, log Log, userUpdateInterval func() string) *
 	}
 }
 
+func (kp *BDKeeper) Close() bool {
+	if kp.conn != nil {
+		err := kp.conn.Close()
+		if err != nil {
+			kp.log.Info("Failed to close database connection", zap.Error(err))
+			return false
+		}
+		kp.log.Info("Database connection closed")
+		return true
+	}
+	kp.log.Info("Attempted to close a nil database connection")
+	return false
+}
+
 func (bd *BDKeeper) SaveUser(key string, user models.User) error {
 	query := `
 		INSERT INTO Users (
-			id, passportSerie, passportNumber, surname, name, patronymic, address,
-			default_end_time, timezone, username, password_hash, last_checked_at
+			passportSerie, passportNumber, surname, name, patronymic, address,
+			default_end_time, timezone, password_hash, last_checked_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		)
 		ON CONFLICT (passportSerie, passportNumber) DO NOTHING
 	`
 
 	_, err := bd.conn.Exec(
 		query,
-		user.UUID,
 		user.PassportSerie,
 		user.PassportNumber,
 		user.Surname,
@@ -595,12 +606,6 @@ func (kp *BDKeeper) Ping() bool {
 	if err := kp.conn.PingContext(ctx); err != nil {
 		return false
 	}
-
-	return true
-}
-
-func (kp *BDKeeper) Close() bool {
-	kp.conn.Close()
 
 	return true
 }
