@@ -12,7 +12,6 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file" // registers a migrate driver.
 	_ "github.com/jackc/pgx/v5/stdlib"                   // registers a pgx driver.
-	"github.com/lib/pq"
 	"github.com/wurt83ow/timetracker/internal/models"
 	"github.com/wurt83ow/timetracker/internal/storage"
 	"go.uber.org/zap"
@@ -171,13 +170,14 @@ func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
 		AND Users.passportNumber = updated.passportNumber
 	`
 
+	// Выполнение запроса с использованием pgx
 	_, err := bd.conn.Exec(
 		query,
-		pq.Array(passportSeries),
-		pq.Array(passportNumbers),
-		pq.Array(surnames),
-		pq.Array(names),
-		pq.Array(addresses),
+		passportSeries,
+		passportNumbers,
+		surnames,
+		names,
+		addresses,
 	)
 	if err != nil {
 		bd.log.Info("Ошибка при пакетном обновлении данных пользователей в базе данных: ", zap.Error(err))

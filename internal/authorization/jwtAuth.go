@@ -58,7 +58,6 @@ func (j *JWTAuthz) JWTAuthzMiddleware(log Log) func(next http.Handler) http.Hand
 				userID, err = j.DecodeJWTToUser(jwtCookie.Value)
 				if err != nil {
 					userID = ""
-
 					log.Info("Error occurred creating a cookie", zap.Error(err))
 				}
 			} else {
@@ -66,17 +65,20 @@ func (j *JWTAuthz) JWTAuthzMiddleware(log Log) func(next http.Handler) http.Hand
 			}
 
 			if userID == "" {
-				jwtCookie := r.Header.Get("Authorization")
+				jwtHeader := r.Header.Get("Authorization")
 
-				if jwtCookie != "" {
-					userID, err = j.DecodeJWTToUser(jwtCookie)
-
+				if jwtHeader != "" {
+					userID, err = j.DecodeJWTToUser(jwtHeader)
 					if err != nil {
 						userID = ""
-
-						log.Info("Error occurred creating a cookie", zap.Error(err))
+						log.Info("Error occurred decoding token from header", zap.Error(err))
 					}
 				}
+			}
+
+			if userID == "" {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
 			}
 
 			var keyUserID models.Key = "userID"
@@ -92,15 +94,14 @@ func (j *JWTAuthz) JWTAuthzMiddleware(log Log) func(next http.Handler) http.Hand
 
 func (j *JWTAuthz) CreateJWTTokenForUser(userid string) string {
 	claims := CustomClaims{
-		userid,
-		jwt.StandardClaims{},
+		PassportNumber: userid,
+		StandardClaims: jwt.StandardClaims{},
 	}
 
 	// Encode to token string
 	tokenString, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(j.jwtSigningKey)
 	if err != nil {
 		log.Println("Error occurred generating JWT", err)
-
 		return ""
 	}
 
@@ -109,7 +110,7 @@ func (j *JWTAuthz) CreateJWTTokenForUser(userid string) string {
 
 func (j *JWTAuthz) DecodeJWTToUser(token string) (string, error) {
 	// Decode
-	decodeToken, err := jwt.ParseWithClaims(token, &CustomClaims{}, func(token *jwt.Token) (any, error) {
+	decodedToken, err := jwt.ParseWithClaims(token, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if !(j.jwtSigningMethod == token.Method) {
 			// Check our method hasn't changed since issuance
 			return nil, errors.New("signing method mismatch")
@@ -120,15 +121,15 @@ func (j *JWTAuthz) DecodeJWTToUser(token string) (string, error) {
 
 	// There's two parts. We might decode it successfully but it might
 	// be the case we aren't Valid so you must check both
-	if decClaims, ok := decodeToken.Claims.(*CustomClaims); ok && decodeToken.Valid {
+	if decClaims, ok := decodedToken.Claims.(*CustomClaims); ok && decodedToken.Valid {
 		return decClaims.PassportNumber, nil
 	}
 
 	return "", err
 }
 
-func (j *JWTAuthz) GetHash(PassportNumber string, password string) []byte {
-	src := []byte(PassportNumber + password)
+func (j *JWTAuthz) GetHash(passportNumber string, password string) []byte {
+	src := []byte(passportNumber + password)
 
 	// create a new hash.Hash that calculates the SHA-256 checksum
 	h := sha256.New()
