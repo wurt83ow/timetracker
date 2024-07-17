@@ -106,7 +106,7 @@ func (bd *BDKeeper) SaveUser(key string, user models.User) error {
 			passportSerie, passportNumber, surname, name, patronymic, address,
 			default_end_time, timezone, password_hash, last_checked_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 		)
 		ON CONFLICT (passportSerie, passportNumber) DO NOTHING
 	`
@@ -196,10 +196,9 @@ func (bd *BDKeeper) UpdateUser(user models.User) error {
 			patronymic = $6,
 			address = $7,
 			default_end_time = $8,
-			timezone = $9,
-			username = $10,
-			password_hash = $11,
-			last_checked_at = $12
+			timezone = $9,			
+			password_hash = $10,
+			last_checked_at = $11
 		WHERE passportSerie = $2 AND passportNumber = $3
 	`
 	_, err := bd.conn.Exec(
@@ -239,8 +238,7 @@ func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 		patronymic,
 		address,
 		default_end_time,
-		timezone,
-		username,
+		timezone,	
 		password_hash,
 		last_checked_at
 	FROM
