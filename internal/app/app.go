@@ -24,146 +24,146 @@ import (
 )
 
 type Server struct {
-	srv *http.Server
-	ctx context.Context
+    srv *http.Server
+    ctx context.Context
 }
 
 func NewServer(ctx context.Context) *Server {
-	server := new(Server)
-	server.ctx = ctx
-	return server
+    server := new(Server)
+    server.ctx = ctx
+    return server
 }
 
 func (server *Server) Serve() {
-	// create and initialize a new option instance
-	option := config.NewOptions()
-	option.ParseFlags()
-	fmt.Println(option.LogLevel())
+    // create and initialize a new option instance
+    option := config.NewOptions()
+    option.ParseFlags()
+    fmt.Println(option.LogLevel())
 
-	// get a new logger
-	nLogger, err := logger.NewLogger(option.LogLevel())
-	if err != nil {
-		log.Fatalln(err)
-	}
+    // get a new logger
+    nLogger, err := logger.NewLogger(option.LogLevel())
+    if err != nil {
+        log.Fatalln(err)
+    }
 
-	nLogger.Info("Это Info", zap.Error(err))
+    nLogger.Info("Это Info", zap.Error(err))
 
-	// initialize the keeper instance
-	keeper := initializeKeeper(option.DataBaseDSN, nLogger, option.UserUpdateInterval)
-	if keeper == nil {
-		nLogger.Debug("Failed to initialize keeper")
-	}
-	defer keeper.Close()
+    // initialize the keeper instance
+    keeper := initializeKeeper(option.DataBaseDSN, nLogger, option.UserUpdateInterval)
+    if keeper == nil {
+        nLogger.Debug("Failed to initialize keeper")
+    }
+    defer keeper.Close()
 
-	// initialize the storage instance
-	memoryStorage := initializeStorage(keeper, nLogger)
-	if memoryStorage == nil {
-		nLogger.Debug("Failed to initialize storage")
-	}
+    // initialize the storage instance
+    memoryStorage := initializeStorage(keeper, nLogger)
+    if memoryStorage == nil {
+        nLogger.Debug("Failed to initialize storage")
+    }
 
-	// create a new NewJWTAuthz for user authorization
-	authz := authz.NewJWTAuthz(option.JWTSigningKey(), nLogger)
+    // create a new NewJWTAuthz for user authorization
+    authz := authz.NewJWTAuthz(option.JWTSigningKey(), nLogger)
 
-	// create a new controller to process incoming requests
-	basecontr := initializeBaseController(memoryStorage, option, nLogger, authz)
+    // create a new controller to process incoming requests
+    basecontr := initializeBaseController(memoryStorage, option, nLogger, authz)
 
-	// get a middleware for logging requests
-	reqLog := middleware.NewReqLog(nLogger)
+    // get a middleware for logging requests
+    reqLog := middleware.NewReqLog(nLogger)
 
-	// create router and mount routes
-	r := chi.NewRouter()
-	r.Use(reqLog.RequestLogger)
-	r.Mount("/", basecontr.Route())
+    // create router and mount routes
+    r := chi.NewRouter()
+    r.Use(reqLog.RequestLogger)
+    r.Mount("/", basecontr.Route())
 
-	// Добавление маршрута для Swagger UI
-	r.Get("/swagger/*", httpSwagger.WrapHandler)
+    // Добавление маршрута для Swagger UI
+    r.Get("/swagger/*", httpSwagger.WrapHandler)
 
-	// configure and start the server
-	server.srv = startServer(r, option.RunAddr())
+    // configure and start the server
+    server.srv = startServer(r, option.RunAddr())
 
-	// Создаем канал для получения сигналов прерывания (например, CTRL+C)
-	stopChan := make(chan os.Signal, 1)
-	signal.Notify(stopChan, os.Interrupt)
+    // Создаем канал для получения сигналов прерывания (например, CTRL+C)
+    stopChan := make(chan os.Signal, 1)
+    signal.Notify(stopChan, os.Interrupt)
 
-	// Блокируем выполнение до получения сигнала
-	<-stopChan
+    // Блокируем выполнение до получения сигнала
+    <-stopChan
 
-	// Выполняем корректное завершение сервера
-	server.Shutdown()
+    // Выполняем корректное завершение сервера
+    server.Shutdown()
 }
 
 func initializeKeeper(dataBaseDSN func() string, logger *logger.Logger, userUpdateInterval func() string) *bdkeeper.BDKeeper {
-	if dataBaseDSN() == "" {
-		logger.Warn("DataBaseDSN is empty")
-		return nil
-	}
+    if dataBaseDSN() == "" {
+        logger.Warn("DataBaseDSN is empty")
+        return nil
+    }
 
-	return bdkeeper.NewBDKeeper(dataBaseDSN, logger, userUpdateInterval)
+    return bdkeeper.NewBDKeeper(dataBaseDSN, logger, userUpdateInterval)
 }
 
 func initializeStorage(keeper storage.Keeper, logger *logger.Logger) *storage.MemoryStorage {
-	if keeper == nil {
-		logger.Warn("Keeper is nil, cannot initialize storage")
-		return nil
-	}
+    if keeper == nil {
+        logger.Warn("Keeper is nil, cannot initialize storage")
+        return nil
+    }
 
-	return storage.NewMemoryStorage(keeper, logger)
+    return storage.NewMemoryStorage(keeper, logger)
 }
 
 func initializeBaseController(storage *storage.MemoryStorage, option *config.Options,
-	logger *logger.Logger, authz *authz.JWTAuthz,
+    logger *logger.Logger, authz *authz.JWTAuthz,
 ) *controllers.BaseController {
-	return controllers.NewBaseController(storage, option, logger, authz)
+    return controllers.NewBaseController(storage, option, logger, authz)
 }
 
 func startServer(router chi.Router, address string) *http.Server {
-	const (
-		oneMegabyte = 1 << 20
-		readTimeout = 3 * time.Second
-	)
+    const (
+        oneMegabyte = 1 << 20
+        readTimeout = 3 * time.Second
+    )
 
-	server := &http.Server{
-		Addr:                         address,
-		Handler:                      router,
-		ReadHeaderTimeout:            readTimeout,
-		WriteTimeout:                 readTimeout,
-		IdleTimeout:                  readTimeout,
-		ReadTimeout:                  readTimeout,
-		MaxHeaderBytes:               oneMegabyte, // 1 MB
-		DisableGeneralOptionsHandler: false,
-		TLSConfig:                    nil,
-		TLSNextProto:                 nil,
-		ConnState:                    nil,
-		ErrorLog:                     nil,
-		BaseContext:                  nil,
-		ConnContext:                  nil,
-	}
+    server := &http.Server{
+        Addr:                         address,
+        Handler:                      router,
+        ReadHeaderTimeout:            readTimeout,
+        WriteTimeout:                 readTimeout,
+        IdleTimeout:                  readTimeout,
+        ReadTimeout:                  readTimeout,
+        MaxHeaderBytes:               oneMegabyte, // 1 MB
+        DisableGeneralOptionsHandler: false,
+        TLSConfig:                    nil,
+        TLSNextProto:                 nil,
+        ConnState:                    nil,
+        ErrorLog:                     nil,
+        BaseContext:                  nil,
+        ConnContext:                  nil,
+    }
 
-	go func() {
-		err := server.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalln(err)
-		}
-	}()
+    go func() {
+        err := server.ListenAndServe()
+        if err != nil && !errors.Is(err, http.ErrServerClosed) {
+            log.Fatalln(err)
+        }
+    }()
 
-	return server
+    return server
 }
 
 func (server *Server) Shutdown() {
-	log.Printf("server stopped")
+    log.Printf("server stopped")
 
-	const shutdownTimeout = 5 * time.Second
-	ctxShutDown, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+    const shutdownTimeout = 5 * time.Second
+    ctxShutDown, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 
-	defer cancel()
+    defer cancel()
 
-	if server.srv != nil {
-		if err := server.srv.Shutdown(ctxShutDown); err != nil {
-			if !errors.Is(err, http.ErrServerClosed) {
-				log.Fatalf("server Shutdown Failed:%s", err)
-			}
-		}
-	}
+    if server.srv != nil {
+        if err := server.srv.Shutdown(ctxShutDown); err != nil {
+            if !errors.Is(err, http.ErrServerClosed) {
+                log.Fatalf("server Shutdown Failed:%s", err)
+            }
+        }
+    }
 
-	log.Println("server exited properly")
+    log.Println("server exited properly")
 }

@@ -73,16 +73,16 @@ paths:
   /api/task:
     delete:
       consumes:
-      - application/json
+        - application/json
       description: Delete a task from the database
       parameters:
-      - description: Task ID
-        in: query
-        name: id
-        required: true
-        type: integer
+        - description: Task ID
+          in: query
+          name: id
+          required: true
+          type: integer
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: Task deleted successfully
@@ -102,20 +102,20 @@ paths:
             type: string
       summary: Delete task
       tags:
-      - Tasks
+        - Tasks
     post:
       consumes:
-      - application/json
+        - application/json
       description: Add a new task to the database
       parameters:
-      - description: Task Info
-        in: body
-        name: task
-        required: true
-        schema:
-          $ref: '#/definitions/models.Task'
+        - description: Task Info
+          in: body
+          name: task
+          required: true
+          schema:
+            $ref: "#/definitions/models.Task"
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: Task added successfully
@@ -131,20 +131,20 @@ paths:
             type: string
       summary: Add task
       tags:
-      - Tasks
+        - Tasks
     put:
       consumes:
-      - application/json
+        - application/json
       description: Update a task in the database
       parameters:
-      - description: Task Info
-        in: body
-        name: task
-        required: true
-        schema:
-          $ref: '#/definitions/models.Task'
+        - description: Task Info
+          in: body
+          name: task
+          required: true
+          schema:
+            $ref: "#/definitions/models.Task"
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: Task updated successfully
@@ -164,21 +164,21 @@ paths:
             type: string
       summary: Update task
       tags:
-      - Tasks
+        - Tasks
   /api/task/start:
     post:
       consumes:
-      - application/json
+        - application/json
       description: Start tracking time for a specific task
       parameters:
-      - description: Task Info
-        in: body
-        name: task
-        required: true
-        schema:
-          $ref: '#/definitions/models.RequestData'
+        - description: Task Info
+          in: body
+          name: task
+          required: true
+          schema:
+            $ref: "#/definitions/models.RequestData"
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: Task tracking started successfully
@@ -198,21 +198,21 @@ paths:
             type: string
       summary: Start task tracking
       tags:
-      - Task
+        - Task
   /api/task/stop:
     post:
       consumes:
-      - application/json
+        - application/json
       description: Stop tracking time for a specific task
       parameters:
-      - description: Task Info
-        in: body
-        name: task
-        required: true
-        schema:
-          $ref: '#/definitions/models.RequestData'
+        - description: Task Info
+          in: body
+          name: task
+          required: true
+          schema:
+            $ref: "#/definitions/models.RequestData"
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: Task tracking stopped successfully
@@ -232,27 +232,27 @@ paths:
             type: string
       summary: Stop task tracking
       tags:
-      - Task
+        - Task
   /api/task/summary:
     post:
       consumes:
-      - application/json
+        - application/json
       description: Get a summary of tasks for a user within a date range
       parameters:
-      - description: Summary Info
-        in: body
-        name: summary
-        required: true
-        schema:
-          $ref: '#/definitions/models.RequestDataTask'
+        - description: Summary Info
+          in: body
+          name: summary
+          required: true
+          schema:
+            $ref: "#/definitions/models.RequestDataTask"
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: User task summary
           schema:
             items:
-              $ref: '#/definitions/models.TaskSummary'
+              $ref: "#/definitions/models.TaskSummary"
             type: array
         "400":
           description: Bad Request
@@ -268,37 +268,37 @@ paths:
             type: string
       summary: Get user task summary
       tags:
-      - Task
+        - Task
   /api/tasks:
     get:
       consumes:
-      - application/json
+        - application/json
       description: Get tasks from the database
       parameters:
-      - description: Name
-        in: query
-        name: name
-        type: string
-      - description: Description
-        in: query
-        name: description
-        type: string
-      - description: Limit
-        in: query
-        name: limit
-        type: integer
-      - description: Offset
-        in: query
-        name: offset
-        type: integer
+        - description: Name
+          in: query
+          name: name
+          type: string
+        - description: Description
+          in: query
+          name: description
+          type: string
+        - description: Limit
+          in: query
+          name: limit
+          type: integer
+        - description: Offset
+          in: query
+          name: offset
+          type: integer
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: List of tasks
           schema:
             items:
-              $ref: '#/definitions/models.Task'
+              $ref: "#/definitions/models.Task"
             type: array
         "400":
           description: Bad Request
@@ -310,25 +310,25 @@ paths:
             type: string
       summary: Get tasks
       tags:
-      - Tasks
+        - Tasks
   /api/user:
     delete:
       consumes:
-      - application/json
+        - application/json
       description: Delete a user from the database
       parameters:
-      - description: Passport Series
-        in: query
-        name: passportSerie
-        required: true
-        type: integer
-      - description: Passport Number
-        in: query
-        name: passportNumber
-        required: true
-        type: integer
+        - description: Passport Series
+          in: query
+          name: passportSerie
+          required: true
+          type: integer
+        - description: Passport Number
+          in: query
+          name: passportNumber
+          required: true
+          type: integer
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: User deleted successfully
@@ -348,20 +348,20 @@ paths:
             type: string
       summary: Delete user
       tags:
-      - User
+        - User
     post:
       consumes:
-      - application/json
+        - application/json
       description: Add a new user to the database
       parameters:
-      - description: User Info
-        in: body
-        name: user
-        required: true
-        schema:
-          $ref: '#/definitions/models.RequestUser'
+        - description: User Info
+          in: body
+          name: user
+          required: true
+          schema:
+            $ref: "#/definitions/models.RequestUser"
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: User added successfully
@@ -377,20 +377,20 @@ paths:
             type: string
       summary: Add user
       tags:
-      - User
+        - User
     put:
       consumes:
-      - application/json
+        - application/json
       description: Update a user in the database
       parameters:
-      - description: User Info
-        in: body
-        name: user
-        required: true
-        schema:
-          $ref: '#/definitions/models.User'
+        - description: User Info
+          in: body
+          name: user
+          required: true
+          schema:
+            $ref: "#/definitions/models.User"
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: User updated successfully
@@ -410,21 +410,21 @@ paths:
             type: string
       summary: Update user
       tags:
-      - User
+        - User
   /api/user/login:
     post:
       consumes:
-      - application/json
+        - application/json
       description: Login a user and return a JWT token
       parameters:
-      - description: User Info
-        in: body
-        name: user
-        required: true
-        schema:
-          $ref: '#/definitions/models.RequestUser'
+        - description: User Info
+          in: body
+          name: user
+          required: true
+          schema:
+            $ref: "#/definitions/models.RequestUser"
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: User logged in successfully
@@ -444,21 +444,21 @@ paths:
             type: string
       summary: Login user
       tags:
-      - User
+        - User
   /api/user/register:
     post:
       consumes:
-      - application/json
+        - application/json
       description: Register a new user
       parameters:
-      - description: User Info
-        in: body
-        name: user
-        required: true
-        schema:
-          $ref: '#/definitions/models.RequestUser'
+        - description: User Info
+          in: body
+          name: user
+          required: true
+          schema:
+            $ref: "#/definitions/models.RequestUser"
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: User registered successfully
@@ -478,57 +478,57 @@ paths:
             type: string
       summary: Register user
       tags:
-      - User
+        - User
   /api/users:
     get:
       consumes:
-      - application/json
+        - application/json
       description: Get users from the database
       parameters:
-      - description: Passport Series
-        in: query
-        name: passportSerie
-        type: integer
-      - description: Passport Number
-        in: query
-        name: passportNumber
-        type: integer
-      - description: Surname
-        in: query
-        name: surname
-        type: string
-      - description: Name
-        in: query
-        name: name
-        type: string
-      - description: Patronymic
-        in: query
-        name: patronymic
-        type: string
-      - description: Address
-        in: query
-        name: address
-        type: string
-      - description: Timezone
-        in: query
-        name: timezone
-        type: string
-      - description: Limit
-        in: query
-        name: limit
-        type: integer
-      - description: Offset
-        in: query
-        name: offset
-        type: integer
+        - description: Passport Series
+          in: query
+          name: passportSerie
+          type: integer
+        - description: Passport Number
+          in: query
+          name: passportNumber
+          type: integer
+        - description: Surname
+          in: query
+          name: surname
+          type: string
+        - description: Name
+          in: query
+          name: name
+          type: string
+        - description: Patronymic
+          in: query
+          name: patronymic
+          type: string
+        - description: Address
+          in: query
+          name: address
+          type: string
+        - description: Timezone
+          in: query
+          name: timezone
+          type: string
+        - description: Limit
+          in: query
+          name: limit
+          type: integer
+        - description: Offset
+          in: query
+          name: offset
+          type: integer
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: List of users
           schema:
             items:
-              $ref: '#/definitions/models.User'
+              $ref: "#/definitions/models.User"
             type: array
         "400":
           description: Bad Request
@@ -540,12 +540,12 @@ paths:
             type: string
       summary: Get users
       tags:
-      - User
+        - User
   /ping:
     get:
       description: Check if the service is running and can connect to the database
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: Service is running
@@ -557,5 +557,5 @@ paths:
             type: string
       summary: Check service health
       tags:
-      - Health
+        - Health
 swagger: "2.0"

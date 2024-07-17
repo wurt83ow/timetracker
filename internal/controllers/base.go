@@ -1,110 +1,110 @@
 package controllers
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
+    "bytes"
+    "encoding/json"
+    "errors"
+    "net/http"
+    "strconv"
+    "strings"
+    "time"
 
-	"github.com/go-chi/chi"
-	authz "github.com/wurt83ow/timetracker/internal/authorization"
-	"github.com/wurt83ow/timetracker/internal/models"
-	"github.com/wurt83ow/timetracker/internal/storage"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+    "github.com/go-chi/chi"
+    authz "github.com/wurt83ow/timetracker/internal/authorization"
+    "github.com/wurt83ow/timetracker/internal/models"
+    "github.com/wurt83ow/timetracker/internal/storage"
+    "go.uber.org/zap"
+    "go.uber.org/zap/zapcore"
 )
 
 // var keyUserID models.Key = "userID"
 
 type IExternalClient interface {
-	GetData() (string, error)
+    GetData() (string, error)
 }
 
 type Storage interface {
-	GetBaseConnection() bool
-	InsertUser(models.User) error
-	UpdateUser(models.User) error
-	DeleteUser(int, int) error
-	GetUsers(models.Filter, models.Pagination) ([]models.User, error)
+    GetBaseConnection() bool
+    InsertUser(models.User) error
+    UpdateUser(models.User) error
+    DeleteUser(int, int) error
+    GetUsers(models.Filter, models.Pagination) ([]models.User, error)
 
-	InsertTask(models.Task) error
-	UpdateTask(models.Task) error
-	DeleteTask(int) error
-	GetTasks(models.TaskFilter, models.Pagination) ([]models.Task, error)
+    InsertTask(models.Task) error
+    UpdateTask(models.Task) error
+    DeleteTask(int) error
+    GetTasks(models.TaskFilter, models.Pagination) ([]models.Task, error)
 
-	StartTaskTracking(models.TimeEntry) error
-	StopTaskTracking(models.TimeEntry) error
-	GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error)
-	GetUser(int, int) (models.User, error)
+    StartTaskTracking(models.TimeEntry) error
+    StopTaskTracking(models.TimeEntry) error
+    GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error)
+    GetUser(int, int) (models.User, error)
 }
 
 type Options interface {
-	ParseFlags()
-	RunAddr() string
+    ParseFlags()
+    RunAddr() string
 }
 
 type Log interface {
-	Info(string, ...zapcore.Field)
+    Info(string, ...zapcore.Field)
 }
 
 type Authz interface {
-	JWTAuthzMiddleware(authz.Log) func(http.Handler) http.Handler
-	GetHash(string, string) []byte
-	CreateJWTTokenForUser(string) string
-	AuthCookie(string, string) *http.Cookie
+    JWTAuthzMiddleware(authz.Log) func(http.Handler) http.Handler
+    GetHash(string, string) []byte
+    CreateJWTTokenForUser(string) string
+    AuthCookie(string, string) *http.Cookie
 }
 
 type BaseController struct {
-	storage Storage
-	options Options
-	log     Log
-	authz   Authz
+    storage Storage
+    options Options
+    log     Log
+    authz   Authz
 }
 
 func NewBaseController(storage Storage, options Options, log Log, authz Authz) *BaseController {
-	instance := &BaseController{
-		storage: storage,
-		options: options,
-		log:     log,
-		authz:   authz,
-	}
+    instance := &BaseController{
+        storage: storage,
+        options: options,
+        log:     log,
+        authz:   authz,
+    }
 
-	return instance
+    return instance
 }
 
 func (h *BaseController) Route() *chi.Mux {
-	r := chi.NewRouter()
+    r := chi.NewRouter()
 
-	r.Post("/api/user/register", h.Register)
-	r.Post("/api/user/login", h.Login)
-	r.Get("/ping", h.GetPing)
+    r.Post("/api/user/register", h.Register)
+    r.Post("/api/user/login", h.Login)
+    r.Get("/ping", h.GetPing)
 
-	// group where the middleware authorization is needed
-	r.Group(func(r chi.Router) {
-		r.Use(h.authz.JWTAuthzMiddleware(h.log))
+    // group where the middleware authorization is needed
+    r.Group(func(r chi.Router) {
+        r.Use(h.authz.JWTAuthzMiddleware(h.log))
 
-		// Operations with users
-		r.Post("/api/user", h.AddUser)
-		r.Put("/api/user", h.UpdateUser)
-		r.Delete("/api/user", h.DeleteUser)
-		r.Get("/api/users", h.GetUsers)
+        // Operations with users
+        r.Post("/api/user", h.AddUser)
+        r.Put("/api/user", h.UpdateUser)
+        r.Delete("/api/user", h.DeleteUser)
+        r.Get("/api/users", h.GetUsers)
 
-		// Operations with tasks
-		r.Post("/api/task", h.AddTask)
-		r.Put("/api/task", h.UpdateTask)
-		r.Delete("/api/task", h.DeleteTask)
-		r.Get("/api/tasks", h.GetTasks)
+        // Operations with tasks
+        r.Post("/api/task", h.AddTask)
+        r.Put("/api/task", h.UpdateTask)
+        r.Delete("/api/task", h.DeleteTask)
+        r.Get("/api/tasks", h.GetTasks)
 
-		// Operations with tracker
-		r.Post("/api/task/start", h.StartTaskTracking)
-		r.Post("/api/task/stop", h.StopTaskTracking)
-		r.Post("/api/task/summary", h.GetUserTaskSummary)
-	})
+        // Operations with tracker
+        r.Post("/api/task/start", h.StartTaskTracking)
+        r.Post("/api/task/stop", h.StopTaskTracking)
+        r.Post("/api/task/summary", h.GetUserTaskSummary)
+    })
 
-	return r
+    return r
 }
 
 // @Summary Register user
@@ -119,69 +119,69 @@ func (h *BaseController) Route() *chi.Mux {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/user/register [post]
 func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
-	regReq := new(models.RequestUser)
-	dec := json.NewDecoder(r.Body)
+    regReq := new(models.RequestUser)
+    dec := json.NewDecoder(r.Body)
 
-	if err := dec.Decode(&regReq); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest) // code 400
-		return
-	}
+    if err := dec.Decode(&regReq); err != nil {
+        h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest) // code 400
+        return
+    }
 
-	if len(regReq.PassportNumber) == 0 || len(regReq.Password) == 0 {
-		h.log.Info("login or password was not received")
-		w.WriteHeader(http.StatusBadRequest) // code 400
-		return
-	}
+    if len(regReq.PassportNumber) == 0 || len(regReq.Password) == 0 {
+        h.log.Info("login or password was not received")
+        w.WriteHeader(http.StatusBadRequest) // code 400
+        return
+    }
 
-	passportSerie, passportNumber, err := h.parsePassportData(regReq.PassportNumber)
-	if err != nil {
-		h.log.Info(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportSerie, passportNumber, err := h.parsePassportData(regReq.PassportNumber)
+    if err != nil {
+        h.log.Info(err.Error())
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	_, err = h.storage.GetUser(passportSerie, passportNumber)
-	if err == nil {
-		// пользователь уже существует
-		h.log.Info("login is already taken")
-		w.WriteHeader(http.StatusConflict) // 409
-		return
-	} else if err != storage.ErrNotFound {
-		h.log.Info("error checking user existence: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError) // code 500
-		return
-	}
+    _, err = h.storage.GetUser(passportSerie, passportNumber)
+    if err == nil {
+        // пользователь уже существует
+        h.log.Info("login is already taken")
+        w.WriteHeader(http.StatusConflict) // 409
+        return
+    } else if err != storage.ErrNotFound {
+        h.log.Info("error checking user existence: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError) // code 500
+        return
+    }
 
-	Hash := h.authz.GetHash(regReq.PassportNumber, regReq.Password)
+    Hash := h.authz.GetHash(regReq.PassportNumber, regReq.Password)
 
-	userData := models.User{
-		PassportSerie:  passportSerie,
-		PassportNumber: passportNumber,
-		DefaultEndTime: time.Now(),
-		LastCheckedAt:  time.Now(),
-		Hash:           Hash,
-	}
+    userData := models.User{
+        PassportSerie:  passportSerie,
+        PassportNumber: passportNumber,
+        DefaultEndTime: time.Now(),
+        LastCheckedAt:  time.Now(),
+        Hash:           Hash,
+    }
 
-	err = h.storage.InsertUser(userData)
-	if err != nil {
-		if err == storage.ErrConflict {
-			h.log.Info("login is already taken: ", zap.Error(err))
-			w.WriteHeader(http.StatusConflict) //code 409
-		} else {
-			h.log.Info("error insert user to storage: ", zap.Error(err))
-			w.WriteHeader(http.StatusInternalServerError) // code 500
-		}
-		return
-	}
+    err = h.storage.InsertUser(userData)
+    if err != nil {
+        if err == storage.ErrConflict {
+            h.log.Info("login is already taken: ", zap.Error(err))
+            w.WriteHeader(http.StatusConflict) //code 409
+        } else {
+            h.log.Info("error insert user to storage: ", zap.Error(err))
+            w.WriteHeader(http.StatusInternalServerError) // code 500
+        }
+        return
+    }
 
-	freshToken := h.authz.CreateJWTTokenForUser(regReq.PassportNumber)
-	http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
-	http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
+    freshToken := h.authz.CreateJWTTokenForUser(regReq.PassportNumber)
+    http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
+    http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
 
-	w.Header().Set("Authorization", freshToken)
-	w.WriteHeader(http.StatusOK)
-	h.log.Info("sending HTTP 200 response")
+    w.Header().Set("Authorization", freshToken)
+    w.WriteHeader(http.StatusOK)
+    h.log.Info("sending HTTP 200 response")
 }
 
 // @Summary Login user
@@ -196,64 +196,64 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/user/login [post]
 func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
-	metod := zap.String("method", r.Method)
+    metod := zap.String("method", r.Method)
 
-	var rb models.RequestUser
-	if err := json.NewDecoder(r.Body).Decode(&rb); err != nil {
-		// invalid request format
-		w.WriteHeader(http.StatusBadRequest)
-		h.log.Info("invalid request format, request status 400: ", metod)
-		return
-	}
+    var rb models.RequestUser
+    if err := json.NewDecoder(r.Body).Decode(&rb); err != nil {
+        // invalid request format
+        w.WriteHeader(http.StatusBadRequest)
+        h.log.Info("invalid request format, request status 400: ", metod)
+        return
+    }
 
-	passportSerie, passportNumber, err := h.parsePassportData(rb.PassportNumber)
-	if err != nil {
-		h.log.Info(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportSerie, passportNumber, err := h.parsePassportData(rb.PassportNumber)
+    if err != nil {
+        h.log.Info(err.Error())
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	user, err := h.storage.GetUser(passportSerie, passportNumber)
-	if err != nil {
-		// incorrect login/password pair
-		w.WriteHeader(http.StatusUnauthorized) //code 401
-		h.log.Info("incorrect login/password pair, request status 401: ", metod)
-		return
-	}
+    user, err := h.storage.GetUser(passportSerie, passportNumber)
+    if err != nil {
+        // incorrect login/password pair
+        w.WriteHeader(http.StatusUnauthorized) //code 401
+        h.log.Info("incorrect login/password pair, request status 401: ", metod)
+        return
+    }
 
-	if bytes.Equal(user.Hash, h.authz.GetHash(rb.PassportNumber, rb.Password)) {
-		freshToken := h.authz.CreateJWTTokenForUser(rb.PassportNumber)
-		http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
-		http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
+    if bytes.Equal(user.Hash, h.authz.GetHash(rb.PassportNumber, rb.Password)) {
+        freshToken := h.authz.CreateJWTTokenForUser(rb.PassportNumber)
+        http.SetCookie(w, h.authz.AuthCookie("jwt-token", freshToken))
+        http.SetCookie(w, h.authz.AuthCookie("Authorization", freshToken))
 
-		w.Header().Set("Authorization", freshToken)
-		err := json.NewEncoder(w).Encode(models.ResponseUser{
-			Response: "success",
-		})
-		if err != nil {
-			// internal server error
-			w.WriteHeader(http.StatusInternalServerError) //code 500
-			h.log.Info("internal server error, request status 500: ", metod)
-			return
-		}
+        w.Header().Set("Authorization", freshToken)
+        err := json.NewEncoder(w).Encode(models.ResponseUser{
+            Response: "success",
+        })
+        if err != nil {
+            // internal server error
+            w.WriteHeader(http.StatusInternalServerError) //code 500
+            h.log.Info("internal server error, request status 500: ", metod)
+            return
+        }
 
-		return
-	}
+        return
+    }
 
-	err = json.NewEncoder(w).Encode(models.ResponseUser{
-		Response: "incorrect passport/password",
-	})
+    err = json.NewEncoder(w).Encode(models.ResponseUser{
+        Response: "incorrect passport/password",
+    })
 
-	if err != nil {
-		// internal server error
-		w.WriteHeader(http.StatusInternalServerError) //code 500
-		h.log.Info("internal server error, request status 500: ", metod)
-		return
-	}
+    if err != nil {
+        // internal server error
+        w.WriteHeader(http.StatusInternalServerError) //code 500
+        h.log.Info("internal server error, request status 500: ", metod)
+        return
+    }
 
-	// incorrect login/password pair
-	w.WriteHeader(http.StatusUnauthorized) //code 401
-	h.log.Info("incorrect login/password pair, request status 401: ", metod)
+    // incorrect login/password pair
+    w.WriteHeader(http.StatusUnauthorized) //code 401
+    h.log.Info("incorrect login/password pair, request status 401: ", metod)
 }
 
 // @Summary Add user
@@ -267,35 +267,35 @@ func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/user [post]
 func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
-	var reqData models.RequestUser
-	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    var reqData models.RequestUser
+    if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+        h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	passportSerie, passportNumber, err := h.parsePassportData(reqData.PassportNumber)
-	if err != nil {
-		h.log.Info(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportSerie, passportNumber, err := h.parsePassportData(reqData.PassportNumber)
+    if err != nil {
+        h.log.Info(err.Error())
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	user := models.User{
-		PassportSerie:  passportSerie,
-		PassportNumber: passportNumber,
-		DefaultEndTime: time.Now(),
-		LastCheckedAt:  time.Now(),
-	}
+    user := models.User{
+        PassportSerie:  passportSerie,
+        PassportNumber: passportNumber,
+        DefaultEndTime: time.Now(),
+        LastCheckedAt:  time.Now(),
+    }
 
-	if err := h.storage.InsertUser(user); err != nil {
-		h.log.Info("error inserting user to storage: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    if err := h.storage.InsertUser(user); err != nil {
+        h.log.Info("error inserting user to storage: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	h.log.Info("User added successfully")
+    w.WriteHeader(http.StatusOK)
+    h.log.Info("User added successfully")
 }
 
 // @Summary Update user
@@ -310,25 +310,25 @@ func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/user [put]
 func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	var user models.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    var user models.User
+    if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+        h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	if err := h.storage.UpdateUser(user); err == storage.ErrNotFound {
-		h.log.Info("user not found")
-		w.WriteHeader(http.StatusNotFound)
-		return
-	} else if err != nil {
-		h.log.Info("error updating user in storage: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    if err := h.storage.UpdateUser(user); err == storage.ErrNotFound {
+        h.log.Info("user not found")
+        w.WriteHeader(http.StatusNotFound)
+        return
+    } else if err != nil {
+        h.log.Info("error updating user in storage: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	h.log.Info("User updated successfully")
+    w.WriteHeader(http.StatusOK)
+    h.log.Info("User updated successfully")
 }
 
 // @Summary Delete user
@@ -344,36 +344,36 @@ func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/user [delete]
 func (h *BaseController) DeleteUser(w http.ResponseWriter, r *http.Request) {
-	passportSerieStr := r.URL.Query().Get("passportSerie")
-	passportNumberStr := r.URL.Query().Get("passportNumber")
+    passportSerieStr := r.URL.Query().Get("passportSerie")
+    passportNumberStr := r.URL.Query().Get("passportNumber")
 
-	passportSerie, err := strconv.Atoi(passportSerieStr)
-	if err != nil {
-		h.log.Info("invalid passport series format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportSerie, err := strconv.Atoi(passportSerieStr)
+    if err != nil {
+        h.log.Info("invalid passport series format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	passportNumber, err := strconv.Atoi(passportNumberStr)
-	if err != nil {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportNumber, err := strconv.Atoi(passportNumberStr)
+    if err != nil {
+        h.log.Info("invalid passport number format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	err = h.storage.DeleteUser(passportSerie, passportNumber)
-	if err == storage.ErrNotFound {
-		h.log.Info("user not found")
-		w.WriteHeader(http.StatusNotFound)
-		return
-	} else if err != nil {
-		h.log.Info("error deleting user from storage: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    err = h.storage.DeleteUser(passportSerie, passportNumber)
+    if err == storage.ErrNotFound {
+        h.log.Info("user not found")
+        w.WriteHeader(http.StatusNotFound)
+        return
+    } else if err != nil {
+        h.log.Info("error deleting user from storage: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	h.log.Info("User deleted successfully")
+    w.WriteHeader(http.StatusOK)
+    h.log.Info("User deleted successfully")
 }
 
 // @Summary Get users
@@ -395,74 +395,74 @@ func (h *BaseController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/users [get]
 func (h *BaseController) GetUsers(w http.ResponseWriter, r *http.Request) {
-	var filter models.Filter
-	var pagination models.Pagination
+    var filter models.Filter
+    var pagination models.Pagination
 
-	if v := r.URL.Query().Get("passportSerie"); v != "" {
-		val, err := strconv.Atoi(v)
-		if err != nil {
-			h.log.Info("invalid passport series format")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		filter.PassportSerie = &val
-	}
-	if v := r.URL.Query().Get("passportNumber"); v != "" {
-		val, err := strconv.Atoi(v)
-		if err != nil {
-			h.log.Info("invalid passport number format")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		filter.PassportNumber = &val
-	}
-	if v := r.URL.Query().Get("surname"); v != "" {
-		filter.Surname = &v
-	}
-	if v := r.URL.Query().Get("name"); v != "" {
-		filter.Name = &v
-	}
-	if v := r.URL.Query().Get("patronymic"); v != "" {
-		filter.Patronymic = &v
-	}
-	if v := r.URL.Query().Get("address"); v != "" {
-		filter.Address = &v
-	}
-	if v := r.URL.Query().Get("timezone"); v != "" {
-		filter.Timezone = &v
-	}
+    if v := r.URL.Query().Get("passportSerie"); v != "" {
+        val, err := strconv.Atoi(v)
+        if err != nil {
+            h.log.Info("invalid passport series format")
+            w.WriteHeader(http.StatusBadRequest)
+            return
+        }
+        filter.PassportSerie = &val
+    }
+    if v := r.URL.Query().Get("passportNumber"); v != "" {
+        val, err := strconv.Atoi(v)
+        if err != nil {
+            h.log.Info("invalid passport number format")
+            w.WriteHeader(http.StatusBadRequest)
+            return
+        }
+        filter.PassportNumber = &val
+    }
+    if v := r.URL.Query().Get("surname"); v != "" {
+        filter.Surname = &v
+    }
+    if v := r.URL.Query().Get("name"); v != "" {
+        filter.Name = &v
+    }
+    if v := r.URL.Query().Get("patronymic"); v != "" {
+        filter.Patronymic = &v
+    }
+    if v := r.URL.Query().Get("address"); v != "" {
+        filter.Address = &v
+    }
+    if v := r.URL.Query().Get("timezone"); v != "" {
+        filter.Timezone = &v
+    }
 
-	if v := r.URL.Query().Get("limit"); v != "" {
-		val, err := strconv.Atoi(v)
-		if err != nil {
-			h.log.Info("invalid limit format")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		pagination.Limit = val
-	}
-	if v := r.URL.Query().Get("offset"); v != "" {
-		val, err := strconv.Atoi(v)
-		if err != nil {
-			h.log.Info("invalid offset format")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		pagination.Offset = val
-	}
+    if v := r.URL.Query().Get("limit"); v != "" {
+        val, err := strconv.Atoi(v)
+        if err != nil {
+            h.log.Info("invalid limit format")
+            w.WriteHeader(http.StatusBadRequest)
+            return
+        }
+        pagination.Limit = val
+    }
+    if v := r.URL.Query().Get("offset"); v != "" {
+        val, err := strconv.Atoi(v)
+        if err != nil {
+            h.log.Info("invalid offset format")
+            w.WriteHeader(http.StatusBadRequest)
+            return
+        }
+        pagination.Offset = val
+    }
 
-	users, err := h.storage.GetUsers(filter, pagination)
-	if err != nil {
-		h.log.Info("error getting users from storage: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    users, err := h.storage.GetUsers(filter, pagination)
+    if err != nil {
+        h.log.Info("error getting users from storage: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(users); err != nil {
-		h.log.Info("error encoding response: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-	}
+    w.Header().Set("Content-Type", "application/json")
+    if err := json.NewEncoder(w).Encode(users); err != nil {
+        h.log.Info("error encoding response: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+    }
 }
 
 // @Summary Add task
@@ -476,23 +476,23 @@ func (h *BaseController) GetUsers(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/task [post]
 func (h *BaseController) AddTask(w http.ResponseWriter, r *http.Request) {
-	var task models.Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    var task models.Task
+    if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+        h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	task.CreatedAt = time.Now()
+    task.CreatedAt = time.Now()
 
-	if err := h.storage.InsertTask(task); err != nil {
-		h.log.Info("error inserting task to storage: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    if err := h.storage.InsertTask(task); err != nil {
+        h.log.Info("error inserting task to storage: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	h.log.Info("Task added successfully")
+    w.WriteHeader(http.StatusOK)
+    h.log.Info("Task added successfully")
 }
 
 // @Summary Update task
@@ -507,25 +507,25 @@ func (h *BaseController) AddTask(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/task [put]
 func (h *BaseController) UpdateTask(w http.ResponseWriter, r *http.Request) {
-	var task models.Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    var task models.Task
+    if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+        h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	if err := h.storage.UpdateTask(task); err == storage.ErrNotFound {
-		h.log.Info("task not found")
-		w.WriteHeader(http.StatusNotFound)
-		return
-	} else if err != nil {
-		h.log.Info("error updating task in storage: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    if err := h.storage.UpdateTask(task); err == storage.ErrNotFound {
+        h.log.Info("task not found")
+        w.WriteHeader(http.StatusNotFound)
+        return
+    } else if err != nil {
+        h.log.Info("error updating task in storage: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	h.log.Info("Task updated successfully")
+    w.WriteHeader(http.StatusOK)
+    h.log.Info("Task updated successfully")
 }
 
 // @Summary Delete task
@@ -540,28 +540,28 @@ func (h *BaseController) UpdateTask(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/task [delete]
 func (h *BaseController) DeleteTask(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
+    idStr := r.URL.Query().Get("id")
 
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		h.log.Info("invalid task ID format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    id, err := strconv.Atoi(idStr)
+    if err != nil {
+        h.log.Info("invalid task ID format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	err = h.storage.DeleteTask(id)
-	if err == storage.ErrNotFound {
-		h.log.Info("task not found")
-		w.WriteHeader(http.StatusNotFound)
-		return
-	} else if err != nil {
-		h.log.Info("error deleting task from storage: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    err = h.storage.DeleteTask(id)
+    if err == storage.ErrNotFound {
+        h.log.Info("task not found")
+        w.WriteHeader(http.StatusNotFound)
+        return
+    } else if err != nil {
+        h.log.Info("error deleting task from storage: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	h.log.Info("Task deleted successfully")
+    w.WriteHeader(http.StatusOK)
+    h.log.Info("Task deleted successfully")
 }
 
 // @Summary Get tasks
@@ -578,46 +578,46 @@ func (h *BaseController) DeleteTask(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/tasks [get]
 func (h *BaseController) GetTasks(w http.ResponseWriter, r *http.Request) {
-	var filter models.TaskFilter
-	var pagination models.Pagination
+    var filter models.TaskFilter
+    var pagination models.Pagination
 
-	if v := r.URL.Query().Get("name"); v != "" {
-		filter.Name = &v
-	}
-	if v := r.URL.Query().Get("description"); v != "" {
-		filter.Description = &v
-	}
-	if v := r.URL.Query().Get("limit"); v != "" {
-		val, err := strconv.Atoi(v)
-		if err != nil {
-			h.log.Info("invalid limit format")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		pagination.Limit = val
-	}
-	if v := r.URL.Query().Get("offset"); v != "" {
-		val, err := strconv.Atoi(v)
-		if err != nil {
-			h.log.Info("invalid offset format")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		pagination.Offset = val
-	}
+    if v := r.URL.Query().Get("name"); v != "" {
+        filter.Name = &v
+    }
+    if v := r.URL.Query().Get("description"); v != "" {
+        filter.Description = &v
+    }
+    if v := r.URL.Query().Get("limit"); v != "" {
+        val, err := strconv.Atoi(v)
+        if err != nil {
+            h.log.Info("invalid limit format")
+            w.WriteHeader(http.StatusBadRequest)
+            return
+        }
+        pagination.Limit = val
+    }
+    if v := r.URL.Query().Get("offset"); v != "" {
+        val, err := strconv.Atoi(v)
+        if err != nil {
+            h.log.Info("invalid offset format")
+            w.WriteHeader(http.StatusBadRequest)
+            return
+        }
+        pagination.Offset = val
+    }
 
-	tasks, err := h.storage.GetTasks(filter, pagination)
-	if err != nil {
-		h.log.Info("error getting tasks from storage: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    tasks, err := h.storage.GetTasks(filter, pagination)
+    if err != nil {
+        h.log.Info("error getting tasks from storage: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(tasks); err != nil {
-		h.log.Info("error encoding response: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-	}
+    w.Header().Set("Content-Type", "application/json")
+    if err := json.NewEncoder(w).Encode(tasks); err != nil {
+        h.log.Info("error encoding response: ", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+    }
 }
 
 // @Summary Start task tracking
@@ -633,76 +633,76 @@ func (h *BaseController) GetTasks(w http.ResponseWriter, r *http.Request) {
 // @Router /api/task/start [post]
 func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Request) {
 
-	var reqData models.RequestData
-	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    var reqData models.RequestData
+    if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+        h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	// Разделение серии и номера паспорта
-	parts := strings.Split(reqData.PassportNumber, " ")
-	if len(parts) != 2 {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    // Разделение серии и номера паспорта
+    parts := strings.Split(reqData.PassportNumber, " ")
+    if len(parts) != 2 {
+        h.log.Info("invalid passport number format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	passportSerie, err := strconv.Atoi(parts[0])
-	if err != nil {
-		h.log.Info("invalid passport series format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportSerie, err := strconv.Atoi(parts[0])
+    if err != nil {
+        h.log.Info("invalid passport series format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	passportNumber, err := strconv.Atoi(parts[1])
-	if err != nil {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportNumber, err := strconv.Atoi(parts[1])
+    if err != nil {
+        h.log.Info("invalid passport number format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	// Ищем пользователя по серии и номеру паспорта в кэше
-	filter := models.Filter{
-		PassportSerie:  &passportSerie,
-		PassportNumber: &passportNumber,
-	}
-	users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
-	if err != nil || len(users) == 0 {
-		h.log.Info("user not found", zap.Error(err))
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
+    // Ищем пользователя по серии и номеру паспорта в кэше
+    filter := models.Filter{
+        PassportSerie:  &passportSerie,
+        PassportNumber: &passportNumber,
+    }
+    users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
+    if err != nil || len(users) == 0 {
+        h.log.Info("user not found", zap.Error(err))
+        w.WriteHeader(http.StatusNotFound)
+        return
+    }
 
-	user := users[0]
+    user := users[0]
 
-	// Подготовка TimeEntry
-	loc, err := time.LoadLocation(user.Timezone)
-	if err != nil {
-		h.log.Info("invalid user timezone", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    // Подготовка TimeEntry
+    loc, err := time.LoadLocation(user.Timezone)
+    if err != nil {
+        h.log.Info("invalid user timezone", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	startOfDay := time.Now().In(loc).Truncate(24 * time.Hour)
+    startOfDay := time.Now().In(loc).Truncate(24 * time.Hour)
 
-	entry := models.TimeEntry{
-		EventDate:      startOfDay,
-		UserID:         user.UUID,
-		TaskID:         reqData.TaskID,
-		UserTimezone:   user.Timezone,
-		DefaultEndTime: user.DefaultEndTime,
-	}
+    entry := models.TimeEntry{
+        EventDate:      startOfDay,
+        UserID:         user.UUID,
+        TaskID:         reqData.TaskID,
+        UserTimezone:   user.Timezone,
+        DefaultEndTime: user.DefaultEndTime,
+    }
 
-	// Запуск отсчета времени по задаче
-	if err := h.storage.StartTaskTracking(entry); err != nil {
-		h.log.Info("error starting task tracking", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    // Запуск отсчета времени по задаче
+    if err := h.storage.StartTaskTracking(entry); err != nil {
+        h.log.Info("error starting task tracking", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	h.log.Info("Task tracking started successfully")
+    w.WriteHeader(http.StatusOK)
+    h.log.Info("Task tracking started successfully")
 }
 
 // @Summary Stop task tracking
@@ -718,76 +718,76 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 // @Router /api/task/stop [post]
 func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request) {
 
-	var reqData models.RequestData
-	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    var reqData models.RequestData
+    if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+        h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	// Разделение серии и номера паспорта
-	parts := strings.Split(reqData.PassportNumber, " ")
-	if len(parts) != 2 {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    // Разделение серии и номера паспорта
+    parts := strings.Split(reqData.PassportNumber, " ")
+    if len(parts) != 2 {
+        h.log.Info("invalid passport number format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	passportSerie, err := strconv.Atoi(parts[0])
-	if err != nil {
-		h.log.Info("invalid passport series format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportSerie, err := strconv.Atoi(parts[0])
+    if err != nil {
+        h.log.Info("invalid passport series format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	passportNumber, err := strconv.Atoi(parts[1])
-	if err != nil {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportNumber, err := strconv.Atoi(parts[1])
+    if err != nil {
+        h.log.Info("invalid passport number format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	// Ищем пользователя по серии и номеру паспорта в кэше
-	filter := models.Filter{
-		PassportSerie:  &passportSerie,
-		PassportNumber: &passportNumber,
-	}
-	users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
-	if err != nil || len(users) == 0 {
-		h.log.Info("user not found", zap.Error(err))
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
+    // Ищем пользователя по серии и номеру паспорта в кэше
+    filter := models.Filter{
+        PassportSerie:  &passportSerie,
+        PassportNumber: &passportNumber,
+    }
+    users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
+    if err != nil || len(users) == 0 {
+        h.log.Info("user not found", zap.Error(err))
+        w.WriteHeader(http.StatusNotFound)
+        return
+    }
 
-	user := users[0]
+    user := users[0]
 
-	// Подготовка TimeEntry
-	loc, err := time.LoadLocation(user.Timezone)
-	if err != nil {
-		h.log.Info("invalid user timezone", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    // Подготовка TimeEntry
+    loc, err := time.LoadLocation(user.Timezone)
+    if err != nil {
+        h.log.Info("invalid user timezone", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	startOfDay := time.Now().In(loc).Truncate(24 * time.Hour)
+    startOfDay := time.Now().In(loc).Truncate(24 * time.Hour)
 
-	entry := models.TimeEntry{
-		EventDate:      startOfDay,
-		UserID:         user.UUID,
-		TaskID:         reqData.TaskID,
-		UserTimezone:   user.Timezone,
-		DefaultEndTime: user.DefaultEndTime,
-	}
+    entry := models.TimeEntry{
+        EventDate:      startOfDay,
+        UserID:         user.UUID,
+        TaskID:         reqData.TaskID,
+        UserTimezone:   user.Timezone,
+        DefaultEndTime: user.DefaultEndTime,
+    }
 
-	// Остановка отсчета времени по задаче
-	if err := h.storage.StopTaskTracking(entry); err != nil {
-		h.log.Info("error stopping task tracking", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    // Остановка отсчета времени по задаче
+    if err := h.storage.StopTaskTracking(entry); err != nil {
+        h.log.Info("error stopping task tracking", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	h.log.Info("Task tracking stopped successfully")
+    w.WriteHeader(http.StatusOK)
+    h.log.Info("Task tracking stopped successfully")
 }
 
 // @Summary Get user task summary
@@ -803,77 +803,77 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 // @Router /api/task/summary [post]
 func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Request) {
 
-	var reqData models.RequestDataTask
-	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    var reqData models.RequestDataTask
+    if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+        h.log.Info("cannot decode request JSON body: ", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	// Разделение серии и номера паспорта
-	parts := strings.Split(reqData.PassportNumber, " ")
-	if len(parts) != 2 {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    // Разделение серии и номера паспорта
+    parts := strings.Split(reqData.PassportNumber, " ")
+    if len(parts) != 2 {
+        h.log.Info("invalid passport number format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	passportSerie, err := strconv.Atoi(parts[0])
-	if err != nil {
-		h.log.Info("invalid passport series format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportSerie, err := strconv.Atoi(parts[0])
+    if err != nil {
+        h.log.Info("invalid passport series format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	passportNumber, err := strconv.Atoi(parts[1])
-	if err != nil {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    passportNumber, err := strconv.Atoi(parts[1])
+    if err != nil {
+        h.log.Info("invalid passport number format")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	// Ищем пользователя по серии и номеру паспорта в кэше
-	filter := models.Filter{
-		PassportSerie:  &passportSerie,
-		PassportNumber: &passportNumber,
-	}
-	users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
-	if err != nil || len(users) == 0 {
-		h.log.Info("user not found", zap.Error(err))
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
+    // Ищем пользователя по серии и номеру паспорта в кэше
+    filter := models.Filter{
+        PassportSerie:  &passportSerie,
+        PassportNumber: &passportNumber,
+    }
+    users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
+    if err != nil || len(users) == 0 {
+        h.log.Info("user not found", zap.Error(err))
+        w.WriteHeader(http.StatusNotFound)
+        return
+    }
 
-	user := users[0]
+    user := users[0]
 
-	// Парсинг дат начала и конца периода
-	startDate, err := time.Parse(time.RFC3339, reqData.StartDate)
-	if err != nil {
-		h.log.Info("invalid start date format", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    // Парсинг дат начала и конца периода
+    startDate, err := time.Parse(time.RFC3339, reqData.StartDate)
+    if err != nil {
+        h.log.Info("invalid start date format", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	endDate, err := time.Parse(time.RFC3339, reqData.EndDate)
-	if err != nil {
-		h.log.Info("invalid end date format", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+    endDate, err := time.Parse(time.RFC3339, reqData.EndDate)
+    if err != nil {
+        h.log.Info("invalid end date format", zap.Error(err))
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
-	// Получение сводки задач пользователя
-	summary, err := h.storage.GetUserTaskSummary(user.UUID, startDate, endDate, user.Timezone, user.DefaultEndTime)
-	if err != nil {
-		h.log.Info("error getting user task summary", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+    // Получение сводки задач пользователя
+    summary, err := h.storage.GetUserTaskSummary(user.UUID, startDate, endDate, user.Timezone, user.DefaultEndTime)
+    if err != nil {
+        h.log.Info("error getting user task summary", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(summary); err != nil {
-		h.log.Info("error encoding response", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
-	}
+    w.Header().Set("Content-Type", "application/json")
+    if err := json.NewEncoder(w).Encode(summary); err != nil {
+        h.log.Info("error encoding response", zap.Error(err))
+        w.WriteHeader(http.StatusInternalServerError)
+    }
 }
 
 // @Summary Check service health
@@ -884,31 +884,31 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /ping [get]
 func (h *BaseController) GetPing(w http.ResponseWriter, r *http.Request) {
-	if !h.storage.GetBaseConnection() {
-		h.log.Info("got status internal server error")
-		w.WriteHeader(http.StatusInternalServerError) // 500
-		return
-	}
+    if !h.storage.GetBaseConnection() {
+        h.log.Info("got status internal server error")
+        w.WriteHeader(http.StatusInternalServerError) // 500
+        return
+    }
 
-	w.WriteHeader(http.StatusOK) // 200
-	h.log.Info("sending HTTP 200 response")
+    w.WriteHeader(http.StatusOK) // 200
+    h.log.Info("sending HTTP 200 response")
 }
 
 func (h *BaseController) parsePassportData(passportNumber string) (int, int, error) {
-	parts := strings.Split(passportNumber, " ")
-	if len(parts) != 2 {
-		return 0, 0, errors.New("invalid passport number format")
-	}
+    parts := strings.Split(passportNumber, " ")
+    if len(parts) != 2 {
+        return 0, 0, errors.New("invalid passport number format")
+    }
 
-	passportSerie, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, 0, errors.New("invalid passport series format")
-	}
+    passportSerie, err := strconv.Atoi(parts[0])
+    if err != nil {
+        return 0, 0, errors.New("invalid passport series format")
+    }
 
-	passportNumberInt, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0, 0, errors.New("invalid passport number format")
-	}
+    passportNumberInt, err := strconv.Atoi(parts[1])
+    if err != nil {
+        return 0, 0, errors.New("invalid passport number format")
+    }
 
-	return passportSerie, passportNumberInt, nil
+    return passportSerie, passportNumberInt, nil
 }
