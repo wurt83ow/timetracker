@@ -1,4 +1,4 @@
-CREATE TABLE User (
+CREATE TABLE Users (
     id SERIAL PRIMARY KEY,
     passportSerie INTEGER NOT NULL,
     passportNumber INTEGER NOT NULL,

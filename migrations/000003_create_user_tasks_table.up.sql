@@ -5,7 +5,7 @@ CREATE TABLE user_tasks (
     event_date DATE,
     start_time TIME WITH TIME ZONE,
     end_time TIME WITH TIME ZONE,
-    FOREIGN KEY (user_id) REFERENCES User(id),
+    FOREIGN KEY (user_id) REFERENCES Users(id),
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 
