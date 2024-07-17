@@ -78,17 +78,30 @@ func NewBaseController(storage Storage, options Options, log Log, authz Authz) *
 func (h *BaseController) Route() *chi.Mux {
 	r := chi.NewRouter()
 
-	// r.Post("/api/user/register", h.Register)
-	// r.Post("/api/user/login", h.Login)
+	r.Post("/api/user/register", h.Register)
+	r.Post("/api/user/login", h.Login)
 	r.Get("/ping", h.GetPing)
-	r.Post("/api/user", h.AddUser)
-	r.Put("/api/user", h.UpdateUser)
-	r.Delete("/api/user", h.DeleteUser)
 
 	// group where the middleware authorization is needed
 	r.Group(func(r chi.Router) {
 		r.Use(h.authz.JWTAuthzMiddleware(h.log))
 
+		// Operations with users
+		r.Post("/api/user", h.AddUser)
+		r.Put("/api/user", h.UpdateUser)
+		r.Delete("/api/user", h.DeleteUser)
+		r.Get("/api/users", h.GetUsers)
+
+		// Operations with tasks
+		r.Post("/api/task", h.AddTask)
+		r.Put("/api/task", h.UpdateTask)
+		r.Delete("/api/task", h.DeleteTask)
+		r.Get("/api/tasks", h.GetTasks)
+
+		// Operations with tracker
+		r.Post("/api/task/start", h.StartTaskTracking)
+		r.Post("/api/task/stop", h.StopTaskTracking)
+		r.Post("/api/task/summary", h.GetUserTaskSummary)
 	})
 
 	return r
