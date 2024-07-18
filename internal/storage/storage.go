@@ -58,8 +58,8 @@ type Keeper interface {
 	Close() bool
 }
 
+// NewMemoryStorage creates a new MemoryStorage instance
 func NewMemoryStorage(ctx context.Context, keeper Keeper, log Log) *MemoryStorage {
-
 	users := make(StorageUsers)
 	tasks := make(StorageTasks)
 
@@ -88,32 +88,34 @@ func NewMemoryStorage(ctx context.Context, keeper Keeper, log Log) *MemoryStorag
 	}
 }
 
+// UpdateUsersInfo updates user information in the storage
 func (s *MemoryStorage) UpdateUsersInfo(ctx context.Context, result []models.ExtUserData) error {
-
 	err := s.keeper.UpdateUsersInfo(ctx, result)
 	if err != nil {
 		return err
 	}
 
-	for _, v := range result {
+	s.umx.Lock()
+	defer s.umx.Unlock()
 
+	for _, v := range result {
 		key := fmt.Sprintf("%d %d", v.PassportSerie, v.PassportNumber)
 		if o, exists := s.users[key]; exists {
-			if exists {
-
-				o.Surname = v.Surname
-				o.Name = v.Name
-				o.Address = v.Address
-				s.users[key] = o
-			}
+			o.Surname = v.Surname
+			o.Name = v.Name
+			o.Address = v.Address
+			s.users[key] = o
 		}
 	}
 
 	return nil
 }
 
+// InsertUser inserts a new user into the storage
 func (s *MemoryStorage) InsertUser(ctx context.Context, user models.User) error {
 	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
+	s.umx.Lock()
+	defer s.umx.Unlock()
 	if _, exists := s.users[key]; exists {
 		return ErrConflict
 	}
@@ -129,19 +131,22 @@ func (s *MemoryStorage) InsertUser(ctx context.Context, user models.User) error 
 	return nil
 }
 
+// UpdateUser updates an existing user in the storage
 func (s *MemoryStorage) UpdateUser(ctx context.Context, user models.User) error {
-	// Формируем ключ для поиска пользователя в хранилище по серии и номеру паспорта
+	// Form the key to search for the user in the storage by passport series and number
 	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
+	s.umx.Lock()
+	defer s.umx.Unlock()
 
-	// Проверяем, существует ли пользователь с таким ключом в хранилище
+	// Check if the user with such a key exists in the storage
 	if _, exists := s.users[key]; !exists {
 		return ErrNotFound
 	}
 
-	// Обновляем пользователя в памяти
+	// Update the user in memory
 	s.users[key] = user
 
-	// Пытаемся обновить пользователя через keeper
+	// Attempt to update the user through the keeper
 	if err := s.keeper.UpdateUser(ctx, user); err != nil {
 		return err
 	}
@@ -149,8 +154,11 @@ func (s *MemoryStorage) UpdateUser(ctx context.Context, user models.User) error 
 	return nil
 }
 
+// GetUsers retrieves users from the storage based on the provided filter and pagination
 func (s *MemoryStorage) GetUsers(ctx context.Context, filter models.Filter, pagination models.Pagination) ([]models.User, error) {
 	var result []models.User
+	s.umx.RLock()
+	defer s.umx.RUnlock()
 
 	for _, user := range s.users {
 		if filter.PassportSerie != nil && *filter.PassportSerie != user.PassportSerie {
@@ -192,8 +200,12 @@ func (s *MemoryStorage) GetUsers(ctx context.Context, filter models.Filter, pagi
 	return result[start:end], nil
 }
 
+// DeleteUser deletes a user from the storage
 func (s *MemoryStorage) DeleteUser(ctx context.Context, passportSerie, passportNumber int) error {
 	key := fmt.Sprintf("%d %d", passportSerie, passportNumber)
+	s.umx.Lock()
+	defer s.umx.Unlock()
+
 	if _, exists := s.users[key]; !exists {
 		return ErrNotFound
 	}
@@ -209,6 +221,7 @@ func (s *MemoryStorage) DeleteUser(ctx context.Context, passportSerie, passportN
 	return nil
 }
 
+// GetNonUpdateUsers retrieves users who haven't been updated within a specified interval
 func (s *MemoryStorage) GetNonUpdateUsers(ctx context.Context) ([]models.ExtUserData, error) {
 	users, err := s.keeper.GetNonUpdateUsers(ctx)
 	if err != nil {
@@ -218,7 +231,11 @@ func (s *MemoryStorage) GetNonUpdateUsers(ctx context.Context) ([]models.ExtUser
 	return users, nil
 }
 
+// InsertTask inserts a new task into the storage
 func (s *MemoryStorage) InsertTask(ctx context.Context, task models.Task) error {
+	s.omx.Lock()
+	defer s.omx.Unlock()
+
 	if _, exists := s.tasks[task.ID]; exists {
 		return ErrConflict
 	}
@@ -234,7 +251,11 @@ func (s *MemoryStorage) InsertTask(ctx context.Context, task models.Task) error 
 	return nil
 }
 
+// UpdateTask updates an existing task in the storage
 func (s *MemoryStorage) UpdateTask(ctx context.Context, task models.Task) error {
+	s.omx.Lock()
+	defer s.omx.Unlock()
+
 	if _, exists := s.tasks[task.ID]; !exists {
 		return ErrNotFound
 	}
@@ -242,8 +263,11 @@ func (s *MemoryStorage) UpdateTask(ctx context.Context, task models.Task) error 
 	return nil
 }
 
+// GetTasks retrieves tasks from the storage based on the provided filter and pagination
 func (s *MemoryStorage) GetTasks(ctx context.Context, filter models.TaskFilter, pagination models.Pagination) ([]models.Task, error) {
 	var result []models.Task
+	s.omx.RLock()
+	defer s.omx.RUnlock()
 
 	for _, task := range s.tasks {
 		if filter.Name != nil && !strings.Contains(task.Name, *filter.Name) {
@@ -270,7 +294,11 @@ func (s *MemoryStorage) GetTasks(ctx context.Context, filter models.TaskFilter, 
 	return result[start:end], nil
 }
 
+// DeleteTask deletes a task from the storage
 func (s *MemoryStorage) DeleteTask(ctx context.Context, id int) error {
+	s.omx.Lock()
+	defer s.omx.Unlock()
+
 	if _, exists := s.tasks[id]; !exists {
 		return ErrNotFound
 	}
@@ -286,6 +314,7 @@ func (s *MemoryStorage) DeleteTask(ctx context.Context, id int) error {
 	return nil
 }
 
+// StartTaskTracking starts tracking time for a task
 func (s *MemoryStorage) StartTaskTracking(ctx context.Context, entry models.TimeEntry) error {
 	err := s.keeper.StartTaskTracking(ctx, entry)
 	if err != nil {
@@ -295,6 +324,7 @@ func (s *MemoryStorage) StartTaskTracking(ctx context.Context, entry models.Time
 	return nil
 }
 
+// StopTaskTracking stops tracking time for a task
 func (s *MemoryStorage) StopTaskTracking(ctx context.Context, entry models.TimeEntry) error {
 	err := s.keeper.StopTaskTracking(ctx, entry)
 	if err != nil {
@@ -304,6 +334,7 @@ func (s *MemoryStorage) StopTaskTracking(ctx context.Context, entry models.TimeE
 	return nil
 }
 
+// GetUserTaskSummary retrieves a summary of tasks for a user within a specified date range
 func (s *MemoryStorage) GetUserTaskSummary(ctx context.Context, userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error) {
 	summary, err := s.keeper.GetUserTaskSummary(ctx, userID, startDate, endDate, userTimezone, defaultEndTime)
 	if err != nil {
@@ -313,6 +344,7 @@ func (s *MemoryStorage) GetUserTaskSummary(ctx context.Context, userID int, star
 	return summary, nil
 }
 
+// GetUser retrieves a user from the storage by passport series and number
 func (s *MemoryStorage) GetUser(ctx context.Context, passportSerie, passportNumber int) (models.User, error) {
 	s.umx.RLock()
 	defer s.umx.RUnlock()
@@ -326,6 +358,7 @@ func (s *MemoryStorage) GetUser(ctx context.Context, passportSerie, passportNumb
 	return v, nil
 }
 
+// GetBaseConnection checks the base connection to the database
 func (s *MemoryStorage) GetBaseConnection(ctx context.Context) bool {
 	if s.keeper == nil {
 		return false

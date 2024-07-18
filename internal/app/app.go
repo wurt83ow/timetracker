@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-chi/chi"
 	httpSwagger "github.com/swaggo/http-swagger"
-	_ "github.com/wurt83ow/timetracker/docs" // подключение сгенерированных Swagger файлов
+	_ "github.com/wurt83ow/timetracker/docs" // connecting generated Swagger files
 	"github.com/wurt83ow/timetracker/internal/apiservice"
 	authz "github.com/wurt83ow/timetracker/internal/authorization"
 	"github.com/wurt83ow/timetracker/internal/bdkeeper"
@@ -30,17 +30,19 @@ type Server struct {
 	ctx context.Context
 }
 
+// NewServer creates a new Server instance with the provided context
 func NewServer(ctx context.Context) *Server {
 	server := new(Server)
 	server.ctx = ctx
 	return server
 }
 
-// !!! Заменить на .dev и conf
+// !!! ApiSystemAddress returns the API system address
 func ApiSystemAddress() string {
 	return "localhost:8081"
 }
 
+// Serve starts the server and handles signal interruption for graceful shutdown
 func (server *Server) Serve() {
 	// create and initialize a new option instance
 	option := config.NewOptions()
@@ -53,7 +55,7 @@ func (server *Server) Serve() {
 		log.Fatalln(err)
 	}
 
-	nLogger.Info("Это Info", zap.Error(err))
+	nLogger.Info("This is Info", zap.Error(err))
 
 	// initialize the keeper instance
 	keeper := initializeKeeper(option.DataBaseDSN, nLogger, option.UserUpdateInterval)
@@ -95,23 +97,24 @@ func (server *Server) Serve() {
 	r.Use(reqLog.RequestLogger)
 	r.Mount("/", basecontr.Route())
 
-	// Добавление маршрута для Swagger UI
+	// Add route for Swagger UI
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	// configure and start the server
 	server.srv = startServer(r, option.RunAddr())
 
-	// Создаем канал для получения сигналов прерывания (например, CTRL+C)
+	// Create a channel to receive interrupt signals (e.g., CTRL+C)
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt)
 
-	// Блокируем выполнение до получения сигнала
+	// Block execution until a signal is received
 	<-stopChan
 
-	// Выполняем корректное завершение сервера
+	// Perform graceful server shutdown
 	server.Shutdown()
 }
 
+// initializeKeeper initializes a BDKeeper instance
 func initializeKeeper(dataBaseDSN func() string, logger *logger.Logger, userUpdateInterval func() string) *bdkeeper.BDKeeper {
 	if dataBaseDSN() == "" {
 		logger.Warn("DataBaseDSN is empty")
@@ -121,6 +124,7 @@ func initializeKeeper(dataBaseDSN func() string, logger *logger.Logger, userUpda
 	return bdkeeper.NewBDKeeper(dataBaseDSN, logger, userUpdateInterval)
 }
 
+// initializeStorage initializes a MemoryStorage instance
 func initializeStorage(ctx context.Context, keeper storage.Keeper, logger *logger.Logger) *storage.MemoryStorage {
 	if keeper == nil {
 		logger.Warn("Keeper is nil, cannot initialize storage")
@@ -130,29 +134,35 @@ func initializeStorage(ctx context.Context, keeper storage.Keeper, logger *logge
 	return storage.NewMemoryStorage(ctx, keeper, logger)
 }
 
+// initializeBaseController initializes a BaseController instance
 func initializeBaseController(ctx context.Context, storage *storage.MemoryStorage, option *config.Options,
 	logger *logger.Logger, authz *authz.JWTAuthz,
 ) *controllers.BaseController {
 	return controllers.NewBaseController(ctx, storage, option, logger, authz)
 }
 
+// initializeWorkerPool initializes a worker pool with the provided tasks and options
 func initializeWorkerPool(allTask []*workerpool.Task, option *config.Options, logger *logger.Logger) *workerpool.Pool {
 	return workerpool.NewPool(allTask, option.Concurrency, logger, option.TaskExecutionInterval)
 }
 
+// initializeAuthz initializes a JWTAuthz instance for user authorization
 func initializeAuthz(option *config.Options, logger *logger.Logger) *authz.JWTAuthz {
 	return authz.NewJWTAuthz(option.JWTSigningKey(), logger)
 }
 
+// initializeExtController initializes an ExtController instance
 func initializeExtController(ctx context.Context, storage *storage.MemoryStorage, logger *logger.Logger) *controllers.ExtController {
 	return controllers.NewExtController(ctx, storage, ApiSystemAddress, logger)
 }
 
+// initializeApiService initializes an ApiService instance
 func initializeApiService(ctx context.Context, extcontr *controllers.ExtController, pool *workerpool.Pool, memoryStorage *storage.MemoryStorage, logger *logger.Logger, option *config.Options) *apiservice.ApiService {
 	apiService := apiservice.NewApiService(ctx, extcontr, pool, memoryStorage, logger, option.TaskExecutionInterval)
 	return apiService
 }
 
+// startServer configures and starts an HTTP server with the provided router and address
 func startServer(router chi.Router, address string) *http.Server {
 	const (
 		oneMegabyte = 1 << 20
@@ -186,6 +196,7 @@ func startServer(router chi.Router, address string) *http.Server {
 	return server
 }
 
+// Shutdown gracefully shuts down the server
 func (server *Server) Shutdown() {
 	log.Printf("server stopped")
 

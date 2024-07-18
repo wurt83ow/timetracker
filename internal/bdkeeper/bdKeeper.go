@@ -55,7 +55,7 @@ func NewBDKeeper(dsn func() string, log Log, userUpdateInterval func() string) *
 	if err != nil {
 		log.Info("Unable to parse connection string: %v\n")
 	}
-	// Зарегистрируйте драйвер с именем pgx
+	// Register the driver with the name pgx
 	sqlDB := stdlib.OpenDB(*connConfig)
 
 	driver, err := postgres.WithInstance(sqlDB, &postgres.Config{})
@@ -114,7 +114,7 @@ func (kp *BDKeeper) Close() bool {
 
 func (bd *BDKeeper) SaveUser(ctx context.Context, key string, user models.User) error {
 
-	// Преобразование []byte в строку
+	// Convert []byte to string
 	passwordHash := hex.EncodeToString(user.Hash)
 
 	query := `
@@ -154,7 +154,7 @@ func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserD
 		return nil
 	}
 
-	// Подготовка массивов для пакетного обновления
+	// Prepare arrays for batch updating
 	passportSeries := make([]int, len(users))
 	passportNumbers := make([]int, len(users))
 	surnames := make([]string, len(users))
@@ -169,33 +169,36 @@ func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserD
 		addresses[i] = user.Address
 	}
 
-	// Чтение интервала из переменной окружения
+	// Read the interval from the environment variable
 	updateInterval, err := time.ParseDuration(bd.userUpdateInterval())
 	if err != nil {
 		return fmt.Errorf("failed to parse USER_UPDATE_INTERVAL: %w", err)
 	}
 
-	// Получение текущего времени и вычисление порогового времени
+	// Get the current time and calculate the threshold time
 	currentTime := time.Now().UTC()
 	thresholdTime := currentTime.Add(-updateInterval)
 
-	// Начало транзакции
+	// Begin the transaction
 	tx, err := bd.pool.Begin(ctx)
 	if err != nil {
-		bd.log.Info("Ошибка при начале транзакции: ", zap.Error(err))
+		bd.log.Info("Error while beginning transaction: ", zap.Error(err))
 		return err
 	}
 
 	defer func() {
 		if err != nil {
-			tx.Rollback(ctx)
-			bd.log.Info("Транзакция отменена: ", zap.Error(err))
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				bd.log.Info("Error during transaction rollback: ", zap.Error(rollbackErr))
+			} else {
+				bd.log.Info("Transaction rolled back: ", zap.Error(err))
+			}
 		} else {
 			err = tx.Commit(ctx)
 			if err != nil {
-				bd.log.Info("Ошибка при фиксации транзакции: ", zap.Error(err))
+				bd.log.Info("Error during transaction commit: ", zap.Error(err))
 			} else {
-				bd.log.Info("Транзакция успешно зафиксирована")
+				bd.log.Info("Transaction committed successfully")
 			}
 		}
 	}()
@@ -218,7 +221,7 @@ func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserD
         AND Users.passportNumber = updated.passportNumber
         AND (Users.last_checked_at IS NULL OR Users.last_checked_at <= $6)
     `
-	// Выполнение запроса с использованием pgx
+	// Execute the query using pgx
 	_, err = tx.Exec(
 		ctx,
 		query,
@@ -230,11 +233,11 @@ func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserD
 		thresholdTime,
 	)
 	if err != nil {
-		bd.log.Info("Ошибка при пакетном обновлении данных пользователей в базе данных: ", zap.Error(err))
+		bd.log.Info("Error during batch updating user data in the database: ", zap.Error(err))
 		return err
 	}
 
-	bd.log.Info("Данные пользователей успешно обновлены")
+	bd.log.Info("User data successfully updated")
 	return nil
 }
 
@@ -268,17 +271,17 @@ func (bd *BDKeeper) UpdateUser(ctx context.Context, user models.User) error {
 		user.LastCheckedAt,
 	)
 	if err != nil {
-		bd.log.Info("Ошибка при обновлении данных пользователя в базе данных: ", zap.Error(err))
+		bd.log.Info("Error updating user data in the database: ", zap.Error(err))
 		return err
 	}
 
-	bd.log.Info("Данные пользователя успешно обновлены: ", zap.Int("passportSerie", user.PassportSerie), zap.Int("passportNumber", user.PassportNumber))
+	bd.log.Info("User data successfully updated: ", zap.Int("passportSerie", user.PassportSerie), zap.Int("passportNumber", user.PassportNumber))
 	return nil
 }
 
 func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error) {
 
-	// get users from bd
+	// get users from db
 	sql := `
     SELECT
         id,
@@ -330,12 +333,12 @@ func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error)
 			return nil, fmt.Errorf("failed to load users: %w", err)
 		}
 
-		// Устанавливаем поле DefaultEndTime только если значение из базы данных не NULL
+		// Set DefaultEndTime field only if the value from the database is not NULL
 		if defaultEndTime.Valid {
 			m.DefaultEndTime = defaultEndTime.Time
 		}
 
-		// Устанавливаем поле LastCheckedAt только если значение из базы данных не NULL
+		// Set LastCheckedAt field only if the value from the database is not NULL
 		if lastCheckedAt.Valid {
 			m.LastCheckedAt = lastCheckedAt.Time
 		}
@@ -366,17 +369,17 @@ func (kp *BDKeeper) DeleteUser(ctx context.Context, passportSerie, passportNumbe
 
 func (kp *BDKeeper) GetNonUpdateUsers(ctx context.Context) ([]models.ExtUserData, error) {
 
-	// Чтение интервала из переменной окружения
+	// Read the interval from the environment variable
 	updateInterval, err := time.ParseDuration(kp.userUpdateInterval())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse USER_UPDATE_INTERVAL: %w", err)
 	}
 
-	// Получение текущего времени и вычисление порогового времени
+	// Get the current time and calculate the threshold time
 	currentTime := time.Now().UTC()
 	thresholdTime := currentTime.Add(-updateInterval)
 
-	// Подготовка SQL-запроса
+	// Prepare the SQL query
 	sql := `
     SELECT
         passportSerie,
@@ -510,7 +513,7 @@ func (kp *BDKeeper) DeleteTask(ctx context.Context, id int) error {
 }
 
 func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntry) error {
-	// Преобразование времени с учетом часового пояса пользователя
+	// Convert time taking into account the user's time zone
 	location, err := time.LoadLocation(entry.UserTimezone)
 	if err != nil {
 		bd.log.Info("error loading user timezone: ", zap.Error(err))
@@ -518,7 +521,7 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
 	}
 	startTime := time.Now().In(location)
 
-	// Проверка наличия активной записи для пользователя и задачи на указанную дату
+	// Check for an active entry for the user and task on the specified date
 	var existingTaskID int
 	query := `
         SELECT id FROM user_tasks
@@ -534,7 +537,7 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
 		return fmt.Errorf("task tracking is already in progress for user %d on task %d for date %s", entry.UserID, entry.TaskID, entry.EventDate)
 	}
 
-	// Вставка новой записи в таблицу user_tasks
+	// Insert a new entry into the user_tasks table
 	insertQuery := `
         INSERT INTO user_tasks (user_id, task_id, event_date, start_time)
         VALUES ($1, $2, $3, $4)
@@ -550,7 +553,7 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
 }
 
 func (bd *BDKeeper) StopTaskTracking(ctx context.Context, entry models.TimeEntry) error {
-	// Преобразование времени с учетом часового пояса пользователя
+	// Convert time taking into account the user's time zone
 	location, err := time.LoadLocation(entry.UserTimezone)
 	if err != nil {
 		bd.log.Info("error loading user timezone: ", zap.Error(err))
@@ -558,7 +561,7 @@ func (bd *BDKeeper) StopTaskTracking(ctx context.Context, entry models.TimeEntry
 	}
 	endTime := time.Now().In(location)
 
-	// Проверка наличия активной записи для пользователя и задачи на указанную дату
+	// Check for an active entry for the user and task on the specified date
 	var id int
 	query := `
         SELECT id FROM user_tasks
@@ -585,7 +588,7 @@ func (bd *BDKeeper) StopTaskTracking(ctx context.Context, entry models.TimeEntry
 		return fmt.Errorf("no active task tracking found for user %d on task %d for date %s", entry.UserID, entry.TaskID, entry.EventDate)
 	}
 
-	// Обновление записи с завершением времени
+	// Update the entry with the end time
 	updateQuery := `
         UPDATE user_tasks
         SET end_time = $1
@@ -630,7 +633,7 @@ func (bd *BDKeeper) GetUserTaskSummary(ctx context.Context, userID int, startDat
 			return nil, err
 		}
 
-		// Если end_time не заполнено, использовать default_end_time или конец текущего дня
+		// If end_time is not filled, use default_end_time or the end of the current day
 		if endTime.IsZero() {
 			if !defaultEndTime.IsZero() {
 				endTime = defaultEndTime
@@ -651,7 +654,7 @@ func (bd *BDKeeper) GetUserTaskSummary(ctx context.Context, userID int, startDat
 		})
 	}
 
-	// Сортировка по убыванию времени
+	// Sort by descending time
 	sort.Slice(taskSummaries, func(i, j int) bool {
 		return taskSummaries[i].TotalTime > taskSummaries[j].TotalTime
 	})
@@ -660,8 +663,8 @@ func (bd *BDKeeper) GetUserTaskSummary(ctx context.Context, userID int, startDat
 }
 
 func (kp *BDKeeper) Ping(ctx context.Context) bool {
-	// Создаем дочерний контекст с тайм-аутом от переданного контекста
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond) // Увеличил время до 1 миллисекунды, так как 1 микросекунда слишком короткое время
+	// Create a child context with a timeout from the passed context
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond) // Increased time to 1 millisecond as 1 microsecond is too short
 	defer cancel()
 
 	if err := kp.pool.Ping(ctx); err != nil {

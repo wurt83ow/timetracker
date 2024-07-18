@@ -18,8 +18,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// var keyUserID models.Key = "userID"
-
 type IExternalClient interface {
 	GetData() (string, error)
 }
@@ -66,6 +64,7 @@ type BaseController struct {
 	authz   Authz
 }
 
+// NewBaseController creates a new BaseController instance
 func NewBaseController(ctx context.Context, storage Storage, options Options, log Log, authz Authz) *BaseController {
 	instance := &BaseController{
 		ctx:     ctx,
@@ -78,6 +77,7 @@ func NewBaseController(ctx context.Context, storage Storage, options Options, lo
 	return instance
 }
 
+// Route sets up the routes for the BaseController
 func (h *BaseController) Route() *chi.Mux {
 	r := chi.NewRouter()
 
@@ -146,7 +146,7 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.storage.GetUser(h.ctx, passportSerie, passportNumber)
 	if err == nil {
-		// пользователь уже существует
+		// user already exists
 		h.log.Info("login is already taken")
 		w.WriteHeader(http.StatusConflict) // 409
 		return
@@ -627,7 +627,7 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Разделение серии и номера паспорта
+	// Split passport series and number
 	parts := strings.Split(reqData.PassportNumber, " ")
 	if len(parts) != 2 {
 		h.log.Info("invalid passport number format")
@@ -649,7 +649,7 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Ищем пользователя по серии и номеру паспорта в кэше
+	// Find user by passport series and number in cache
 	filter := models.Filter{
 		PassportSerie:  &passportSerie,
 		PassportNumber: &passportNumber,
@@ -663,7 +663,7 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 
 	user := users[0]
 
-	// Подготовка TimeEntry
+	// Prepare TimeEntry
 	loc, err := time.LoadLocation(user.Timezone)
 	if err != nil {
 		h.log.Info("invalid user timezone", zap.Error(err))
@@ -681,7 +681,7 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 		DefaultEndTime: user.DefaultEndTime,
 	}
 
-	// Запуск отсчета времени по задаче
+	// Start task tracking
 	if err := h.storage.StartTaskTracking(h.ctx, entry); err != nil {
 		h.log.Info("error starting task tracking", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
@@ -712,7 +712,7 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Разделение серии и номера паспорта
+	// Split passport series and number
 	parts := strings.Split(reqData.PassportNumber, " ")
 	if len(parts) != 2 {
 		h.log.Info("invalid passport number format")
@@ -734,7 +734,7 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Ищем пользователя по серии и номеру паспорта в кэше
+	// Find user by passport series and number in cache
 	filter := models.Filter{
 		PassportSerie:  &passportSerie,
 		PassportNumber: &passportNumber,
@@ -748,7 +748,7 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 
 	user := users[0]
 
-	// Подготовка TimeEntry
+	// Prepare TimeEntry
 	loc, err := time.LoadLocation(user.Timezone)
 	if err != nil {
 		h.log.Info("invalid user timezone", zap.Error(err))
@@ -766,7 +766,7 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 		DefaultEndTime: user.DefaultEndTime,
 	}
 
-	// Остановка отсчета времени по задаче
+	// Stop task tracking
 	if err := h.storage.StopTaskTracking(h.ctx, entry); err != nil {
 		h.log.Info("error stopping task tracking", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
@@ -797,7 +797,7 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Разделение серии и номера паспорта
+	// Split passport series and number
 	parts := strings.Split(reqData.PassportNumber, " ")
 	if len(parts) != 2 {
 		h.log.Info("invalid passport number format")
@@ -819,7 +819,7 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Ищем пользователя по серии и номеру паспорта в кэше
+	// Find user by passport series and number in cache
 	filter := models.Filter{
 		PassportSerie:  &passportSerie,
 		PassportNumber: &passportNumber,
@@ -833,7 +833,7 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 
 	user := users[0]
 
-	// Парсинг дат начала и конца периода
+	// Parse start and end dates
 	startDate, err := time.Parse(time.RFC3339, reqData.StartDate)
 	if err != nil {
 		h.log.Info("invalid start date format", zap.Error(err))
@@ -848,7 +848,7 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Получение сводки задач пользователя
+	// Get user task summary
 	summary, err := h.storage.GetUserTaskSummary(h.ctx, user.UUID, startDate, endDate, user.Timezone, user.DefaultEndTime)
 	if err != nil {
 		h.log.Info("error getting user task summary", zap.Error(err))
@@ -881,6 +881,7 @@ func (h *BaseController) GetPing(w http.ResponseWriter, r *http.Request) {
 	h.log.Info("sending HTTP 200 response")
 }
 
+// parsePassportData parses the passport data from a string into series and number
 func (h *BaseController) parsePassportData(passportNumber string) (int, int, error) {
 	parts := strings.Split(passportNumber, " ")
 	if len(parts) != 2 {

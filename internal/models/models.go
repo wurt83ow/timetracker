@@ -6,7 +6,7 @@ import (
 
 type Key string
 
-// User представляет структуру данных пользователя
+// User represents the user data structure
 type User struct {
 	UUID           int       `db:"id" json:"id"`
 	PassportSerie  int       `db:"passportSerie" json:"passportSerie"`
@@ -30,7 +30,7 @@ type ResponseUser struct {
 	Response string `json:"response,omitempty"`
 }
 
-// TimeEntry представляет структуру записи времени
+// TimeEntry represents the time entry data structure
 type TimeEntry struct {
 	EventDate      time.Time `json:"event_date"`
 	UserID         int       `db:"user_id" json:"user_id"`
@@ -39,7 +39,7 @@ type TimeEntry struct {
 	DefaultEndTime time.Time `json:"default_end_time"`
 }
 
-// ExtUserData представляет структуру параметров пользователей
+// ExtUserData represents the user parameters structure
 type ExtUserData struct {
 	PassportSerie  int    `json:"passportSerie,omitempty"`
 	PassportNumber int    `json:"passportNumber,omitempty"`
@@ -75,7 +75,7 @@ type TaskFilter struct {
 	Description *string `json:"description,omitempty"`
 }
 
-// TaskSummary представляет структуру для возврата данных о трудозатратах
+// TaskSummary represents the structure for returning task effort data
 type TaskSummary struct {
 	TaskID    int    `json:"task_id"`
 	TotalTime string `json:"total_time"`

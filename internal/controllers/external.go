@@ -36,7 +36,7 @@ func (c *ExtController) GetUserInfo(passportSerie int, passportNumber int) (mode
 
 	addr := c.extAddr()
 
-	// Добавление http схемы если она отсутствует
+	// Add http scheme if it is missing
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		addr = "http://" + addr
 	}

@@ -79,7 +79,7 @@ func (a *ApiService) Stop() {
 
 func (a *ApiService) UpdateUsers(ctx context.Context) {
 	t := time.NewTicker(time.Duration(a.taskInterval) * time.Millisecond)
-	fmt.Println("77777777777777", a.taskInterval)
+
 	result := make([]models.ExtUserData, 0)
 
 	var dmx sync.RWMutex
@@ -99,7 +99,7 @@ func (a *ApiService) UpdateUsers(ctx context.Context) {
 		case <-t.C:
 
 			users, err := a.storage.GetNonUpdateUsers(ctx)
-			fmt.Println("77777777777777", users)
+
 			if err != nil {
 
 				return
@@ -151,7 +151,6 @@ func (a *ApiService) CreateUsersTask(users []models.ExtUserData) {
 
 func (a *ApiService) doWork(result []models.ExtUserData) {
 	// perform a group update of the users table (field Surname, Name, Address)
-	fmt.Println("8888888888888888888888888888", result)
 	err := a.storage.UpdateUsersInfo(a.ctx, result)
 	if err != nil {
 		a.log.Info("errors when updating order status: ", zap.Error(err))
