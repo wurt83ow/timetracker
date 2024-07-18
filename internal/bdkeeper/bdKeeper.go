@@ -149,7 +149,7 @@ func (bd *BDKeeper) SaveUser(ctx context.Context, key string, user models.User) 
 	return nil
 }
 
-func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserData) error {
+func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserData) (err error) {
 	if len(users) == 0 {
 		return nil
 	}
@@ -187,7 +187,10 @@ func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserD
 	}
 
 	defer func() {
-		if err != nil {
+		if p := recover(); p != nil {
+			_ = tx.Rollback(ctx)
+			panic(p)
+		} else if err != nil {
 			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
 				bd.log.Info("Error during transaction rollback: ", zap.Error(rollbackErr))
 			} else {
@@ -521,13 +524,36 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
 	}
 	startTime := time.Now().In(location)
 
+	tx, err := bd.pool.Begin(ctx)
+	if err != nil {
+		bd.log.Info("Error while beginning transaction: ", zap.Error(err))
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				bd.log.Info("Error during transaction rollback: ", zap.Error(rollbackErr))
+			} else {
+				bd.log.Info("Transaction rolled back: ", zap.Error(err))
+			}
+		} else {
+			err = tx.Commit(ctx)
+			if err != nil {
+				bd.log.Info("Error during transaction commit: ", zap.Error(err))
+			} else {
+				bd.log.Info("Transaction committed successfully")
+			}
+		}
+	}()
+
 	// Check for an active entry for the user and task on the specified date
 	var existingTaskID int
 	query := `
         SELECT id FROM user_tasks
         WHERE user_id = $1 AND task_id = $2 AND event_date = $3 AND end_time IS NULL
     `
-	err = bd.pool.QueryRow(ctx, query, entry.UserID, entry.TaskID, entry.EventDate).Scan(&existingTaskID)
+	err = tx.QueryRow(ctx, query, entry.UserID, entry.TaskID, entry.EventDate).Scan(&existingTaskID)
 	if err != nil && err != sql.ErrNoRows {
 		bd.log.Info("error checking existing task in database: ", zap.Error(err))
 		return err
@@ -542,7 +568,7 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
         INSERT INTO user_tasks (user_id, task_id, event_date, start_time)
         VALUES ($1, $2, $3, $4)
     `
-	_, err = bd.pool.Exec(ctx, insertQuery, entry.UserID, entry.TaskID, entry.EventDate, startTime)
+	_, err = tx.Exec(ctx, insertQuery, entry.UserID, entry.TaskID, entry.EventDate, startTime)
 	if err != nil {
 		bd.log.Info("error saving task tracking to database: ", zap.Error(err))
 		return err
@@ -561,13 +587,36 @@ func (bd *BDKeeper) StopTaskTracking(ctx context.Context, entry models.TimeEntry
 	}
 	endTime := time.Now().In(location)
 
+	tx, err := bd.pool.Begin(ctx)
+	if err != nil {
+		bd.log.Info("Error while beginning transaction: ", zap.Error(err))
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				bd.log.Info("Error during transaction rollback: ", zap.Error(rollbackErr))
+			} else {
+				bd.log.Info("Transaction rolled back: ", zap.Error(err))
+			}
+		} else {
+			err = tx.Commit(ctx)
+			if err != nil {
+				bd.log.Info("Error during transaction commit: ", zap.Error(err))
+			} else {
+				bd.log.Info("Transaction committed successfully")
+			}
+		}
+	}()
+
 	// Check for an active entry for the user and task on the specified date
 	var id int
 	query := `
         SELECT id FROM user_tasks
         WHERE user_id = $1 AND task_id = $2 AND event_date = $3 AND end_time IS NULL
     `
-	rows, err := bd.pool.Query(ctx, query, entry.UserID, entry.TaskID, entry.EventDate)
+	rows, err := tx.Query(ctx, query, entry.UserID, entry.TaskID, entry.EventDate)
 	if err != nil {
 		bd.log.Info("error checking existing task in database: ", zap.Error(err))
 		return err
@@ -594,7 +643,7 @@ func (bd *BDKeeper) StopTaskTracking(ctx context.Context, entry models.TimeEntry
         SET end_time = $1
         WHERE id = $2
     `
-	_, err = bd.pool.Exec(ctx, updateQuery, endTime, id)
+	_, err = tx.Exec(ctx, updateQuery, endTime, id)
 	if err != nil {
 		bd.log.Info("error updating task tracking in database: ", zap.Error(err))
 		return err
