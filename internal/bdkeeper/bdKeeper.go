@@ -101,7 +101,7 @@ func (kp *BDKeeper) Close() bool {
 	return false
 }
 
-func (bd *BDKeeper) SaveUser(key string, user models.User) error {
+func (bd *BDKeeper) SaveUser(ctx context.Context, key string, user models.User) error {
 
 	// Преобразование []byte в строку
 	passwordHash := hex.EncodeToString(user.Hash)
@@ -137,7 +137,7 @@ func (bd *BDKeeper) SaveUser(key string, user models.User) error {
 	return nil
 }
 
-func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
+func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserData) error {
 	if len(users) == 0 {
 		return nil
 	}
@@ -225,7 +225,7 @@ func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
 	return nil
 }
 
-func (bd *BDKeeper) UpdateUser(user models.User) error {
+func (bd *BDKeeper) UpdateUser(ctx context.Context, user models.User) error {
 
 	query := `
         UPDATE Users SET
@@ -262,8 +262,7 @@ func (bd *BDKeeper) UpdateUser(user models.User) error {
 	return nil
 }
 
-func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
-	ctx := context.Background()
+func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error) {
 
 	// get users from bd
 	sql := `
@@ -334,8 +333,7 @@ func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 	return data, nil
 }
 
-func (kp *BDKeeper) DeleteUser(passportSerie, passportNumber int) error {
-	ctx := context.Background()
+func (kp *BDKeeper) DeleteUser(ctx context.Context, passportSerie, passportNumber int) error {
 
 	query := `
         DELETE FROM Users
@@ -352,9 +350,7 @@ func (kp *BDKeeper) DeleteUser(passportSerie, passportNumber int) error {
 	return nil
 }
 
-func (kp *BDKeeper) GetNonUpdateUsers() ([]models.ExtUserData, error) {
-
-	ctx := context.Background()
+func (kp *BDKeeper) GetNonUpdateUsers(ctx context.Context) ([]models.ExtUserData, error) {
 
 	// Чтение интервала из переменной окружения
 	updateInterval, err := time.ParseDuration(kp.userUpdateInterval())
@@ -414,7 +410,7 @@ func (kp *BDKeeper) GetNonUpdateUsers() ([]models.ExtUserData, error) {
 	return users, nil
 }
 
-func (bd *BDKeeper) SaveTask(task models.Task) error {
+func (bd *BDKeeper) SaveTask(ctx context.Context, task models.Task) error {
 	query := `
         INSERT INTO tasks (
             name, description, created_at
@@ -438,8 +434,7 @@ func (bd *BDKeeper) SaveTask(task models.Task) error {
 	return nil
 }
 
-func (kp *BDKeeper) LoadTasks() (storage.StorageTasks, error) {
-	ctx := context.Background()
+func (kp *BDKeeper) LoadTasks(ctx context.Context) (storage.StorageTasks, error) {
 
 	sql := `
     SELECT
@@ -482,8 +477,7 @@ func (kp *BDKeeper) LoadTasks() (storage.StorageTasks, error) {
 	return data, nil
 }
 
-func (kp *BDKeeper) DeleteTask(id int) error {
-	ctx := context.Background()
+func (kp *BDKeeper) DeleteTask(ctx context.Context, id int) error {
 
 	query := `
         DELETE FROM tasks
@@ -500,7 +494,7 @@ func (kp *BDKeeper) DeleteTask(id int) error {
 	return nil
 }
 
-func (bd *BDKeeper) StartTaskTracking(entry models.TimeEntry) error {
+func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntry) error {
 	// Преобразование времени с учетом часового пояса пользователя
 	location, err := time.LoadLocation(entry.UserTimezone)
 	if err != nil {
@@ -540,7 +534,7 @@ func (bd *BDKeeper) StartTaskTracking(entry models.TimeEntry) error {
 	return nil
 }
 
-func (bd *BDKeeper) StopTaskTracking(entry models.TimeEntry) error {
+func (bd *BDKeeper) StopTaskTracking(ctx context.Context, entry models.TimeEntry) error {
 	// Преобразование времени с учетом часового пояса пользователя
 	location, err := time.LoadLocation(entry.UserTimezone)
 	if err != nil {
@@ -592,7 +586,7 @@ func (bd *BDKeeper) StopTaskTracking(entry models.TimeEntry) error {
 	return nil
 }
 
-func (bd *BDKeeper) GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error) {
+func (bd *BDKeeper) GetUserTaskSummary(ctx context.Context, userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error) {
 	location, err := time.LoadLocation(userTimezone)
 	if err != nil {
 		bd.log.Info("error loading user timezone: ", zap.Error(err))
@@ -650,8 +644,9 @@ func (bd *BDKeeper) GetUserTaskSummary(userID int, startDate, endDate time.Time,
 	return taskSummaries, nil
 }
 
-func (kp *BDKeeper) Ping() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Microsecond)
+func (kp *BDKeeper) Ping(ctx context.Context) bool {
+	// Создаем дочерний контекст с тайм-аутом от переданного контекста
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond) // Увеличил время до 1 миллисекунды, так как 1 микросекунда слишком короткое время
 	defer cancel()
 
 	if err := kp.conn.PingContext(ctx); err != nil {

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 )
 
 type ExtController struct {
+	ctx     context.Context
 	storage Storage
 	log     Log
 	extAddr func() string
@@ -21,8 +23,9 @@ type Pool interface {
 	GetResults() <-chan interface{}
 }
 
-func NewExtController(storage Storage, extAddr func() string, log Log) *ExtController {
+func NewExtController(ctx context.Context, storage Storage, extAddr func() string, log Log) *ExtController {
 	return &ExtController{
+		ctx:     ctx,
 		storage: storage,
 		log:     log,
 		extAddr: extAddr,

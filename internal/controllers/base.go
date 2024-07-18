@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -24,21 +25,21 @@ type IExternalClient interface {
 }
 
 type Storage interface {
-	GetBaseConnection() bool
-	InsertUser(models.User) error
-	UpdateUser(models.User) error
-	DeleteUser(int, int) error
-	GetUsers(models.Filter, models.Pagination) ([]models.User, error)
+	GetBaseConnection(context.Context) bool
+	InsertUser(context.Context, models.User) error
+	UpdateUser(context.Context, models.User) error
+	DeleteUser(context.Context, int, int) error
+	GetUsers(context.Context, models.Filter, models.Pagination) ([]models.User, error)
 
-	InsertTask(models.Task) error
-	UpdateTask(models.Task) error
-	DeleteTask(int) error
-	GetTasks(models.TaskFilter, models.Pagination) ([]models.Task, error)
+	InsertTask(context.Context, models.Task) error
+	UpdateTask(context.Context, models.Task) error
+	DeleteTask(context.Context, int) error
+	GetTasks(context.Context, models.TaskFilter, models.Pagination) ([]models.Task, error)
 
-	StartTaskTracking(models.TimeEntry) error
-	StopTaskTracking(models.TimeEntry) error
-	GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error)
-	GetUser(int, int) (models.User, error)
+	StartTaskTracking(context.Context, models.TimeEntry) error
+	StopTaskTracking(context.Context, models.TimeEntry) error
+	GetUserTaskSummary(context.Context, int, time.Time, time.Time, string, time.Time) ([]models.TaskSummary, error)
+	GetUser(context.Context, int, int) (models.User, error)
 }
 
 type Options interface {
@@ -58,14 +59,16 @@ type Authz interface {
 }
 
 type BaseController struct {
+	ctx     context.Context
 	storage Storage
 	options Options
 	log     Log
 	authz   Authz
 }
 
-func NewBaseController(storage Storage, options Options, log Log, authz Authz) *BaseController {
+func NewBaseController(ctx context.Context, storage Storage, options Options, log Log, authz Authz) *BaseController {
 	instance := &BaseController{
+		ctx:     ctx,
 		storage: storage,
 		options: options,
 		log:     log,
@@ -141,7 +144,7 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.storage.GetUser(passportSerie, passportNumber)
+	_, err = h.storage.GetUser(h.ctx, passportSerie, passportNumber)
 	if err == nil {
 		// пользователь уже существует
 		h.log.Info("login is already taken")
@@ -159,7 +162,7 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 		Hash:           Hash,
 	}
 
-	err = h.storage.InsertUser(userData)
+	err = h.storage.InsertUser(h.ctx, userData)
 	if err != nil {
 		if err == storage.ErrConflict {
 			h.log.Info("login is already taken: ", zap.Error(err))
@@ -209,7 +212,7 @@ func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.storage.GetUser(passportSerie, passportNumber)
+	user, err := h.storage.GetUser(h.ctx, passportSerie, passportNumber)
 	if err != nil {
 		// incorrect login/password pair
 		w.WriteHeader(http.StatusUnauthorized) //code 401
@@ -272,7 +275,7 @@ func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 		LastCheckedAt:  time.Now(),
 	}
 
-	if err := h.storage.InsertUser(user); err != nil {
+	if err := h.storage.InsertUser(h.ctx, user); err != nil {
 		h.log.Info("error inserting user to storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -301,7 +304,7 @@ func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.storage.UpdateUser(user); err == storage.ErrNotFound {
+	if err := h.storage.UpdateUser(h.ctx, user); err == storage.ErrNotFound {
 		h.log.Info("user not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -345,7 +348,7 @@ func (h *BaseController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.storage.DeleteUser(passportSerie, passportNumber)
+	err = h.storage.DeleteUser(h.ctx, passportSerie, passportNumber)
 	if err == storage.ErrNotFound {
 		h.log.Info("user not found")
 		w.WriteHeader(http.StatusNotFound)
@@ -435,7 +438,7 @@ func (h *BaseController) GetUsers(w http.ResponseWriter, r *http.Request) {
 		pagination.Offset = val
 	}
 
-	users, err := h.storage.GetUsers(filter, pagination)
+	users, err := h.storage.GetUsers(h.ctx, filter, pagination)
 	if err != nil {
 		h.log.Info("error getting users from storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
@@ -469,7 +472,7 @@ func (h *BaseController) AddTask(w http.ResponseWriter, r *http.Request) {
 
 	task.CreatedAt = time.Now()
 
-	if err := h.storage.InsertTask(task); err != nil {
+	if err := h.storage.InsertTask(h.ctx, task); err != nil {
 		h.log.Info("error inserting task to storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -498,7 +501,7 @@ func (h *BaseController) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.storage.UpdateTask(task); err == storage.ErrNotFound {
+	if err := h.storage.UpdateTask(h.ctx, task); err == storage.ErrNotFound {
 		h.log.Info("task not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -533,7 +536,7 @@ func (h *BaseController) DeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.storage.DeleteTask(id)
+	err = h.storage.DeleteTask(h.ctx, id)
 	if err == storage.ErrNotFound {
 		h.log.Info("task not found")
 		w.WriteHeader(http.StatusNotFound)
@@ -590,7 +593,7 @@ func (h *BaseController) GetTasks(w http.ResponseWriter, r *http.Request) {
 		pagination.Offset = val
 	}
 
-	tasks, err := h.storage.GetTasks(filter, pagination)
+	tasks, err := h.storage.GetTasks(h.ctx, filter, pagination)
 	if err != nil {
 		h.log.Info("error getting tasks from storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
@@ -651,7 +654,7 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 		PassportSerie:  &passportSerie,
 		PassportNumber: &passportNumber,
 	}
-	users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
+	users, err := h.storage.GetUsers(h.ctx, filter, models.Pagination{Limit: 1})
 	if err != nil || len(users) == 0 {
 		h.log.Info("user not found", zap.Error(err))
 		w.WriteHeader(http.StatusNotFound)
@@ -679,7 +682,7 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Запуск отсчета времени по задаче
-	if err := h.storage.StartTaskTracking(entry); err != nil {
+	if err := h.storage.StartTaskTracking(h.ctx, entry); err != nil {
 		h.log.Info("error starting task tracking", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -736,7 +739,7 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 		PassportSerie:  &passportSerie,
 		PassportNumber: &passportNumber,
 	}
-	users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
+	users, err := h.storage.GetUsers(h.ctx, filter, models.Pagination{Limit: 1})
 	if err != nil || len(users) == 0 {
 		h.log.Info("user not found", zap.Error(err))
 		w.WriteHeader(http.StatusNotFound)
@@ -764,7 +767,7 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 	}
 
 	// Остановка отсчета времени по задаче
-	if err := h.storage.StopTaskTracking(entry); err != nil {
+	if err := h.storage.StopTaskTracking(h.ctx, entry); err != nil {
 		h.log.Info("error stopping task tracking", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -821,7 +824,7 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 		PassportSerie:  &passportSerie,
 		PassportNumber: &passportNumber,
 	}
-	users, err := h.storage.GetUsers(filter, models.Pagination{Limit: 1})
+	users, err := h.storage.GetUsers(h.ctx, filter, models.Pagination{Limit: 1})
 	if err != nil || len(users) == 0 {
 		h.log.Info("user not found", zap.Error(err))
 		w.WriteHeader(http.StatusNotFound)
@@ -846,7 +849,7 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Получение сводки задач пользователя
-	summary, err := h.storage.GetUserTaskSummary(user.UUID, startDate, endDate, user.Timezone, user.DefaultEndTime)
+	summary, err := h.storage.GetUserTaskSummary(h.ctx, user.UUID, startDate, endDate, user.Timezone, user.DefaultEndTime)
 	if err != nil {
 		h.log.Info("error getting user task summary", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
@@ -868,7 +871,7 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /ping [get]
 func (h *BaseController) GetPing(w http.ResponseWriter, r *http.Request) {
-	if !h.storage.GetBaseConnection() {
+	if !h.storage.GetBaseConnection(h.ctx) {
 		h.log.Info("got status internal server error")
 		w.WriteHeader(http.StatusInternalServerError) // 500
 		return

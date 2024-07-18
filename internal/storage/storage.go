@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -29,6 +30,7 @@ type Log interface {
 }
 
 type MemoryStorage struct {
+	ctx    context.Context
 	omx    sync.RWMutex
 	umx    sync.RWMutex
 	users  StorageUsers
@@ -38,25 +40,25 @@ type MemoryStorage struct {
 }
 
 type Keeper interface {
-	LoadUsers() (StorageUsers, error)
-	SaveUser(string, models.User) error
-	UpdateUser(user models.User) error
-	UpdateUsersInfo([]models.ExtUserData) error
-	DeleteUser(int, int) error
-	GetNonUpdateUsers() ([]models.ExtUserData, error)
+	LoadUsers(context.Context) (StorageUsers, error)
+	SaveUser(context.Context, string, models.User) error
+	UpdateUser(context.Context, models.User) error
+	UpdateUsersInfo(context.Context, []models.ExtUserData) error
+	DeleteUser(context.Context, int, int) error
+	GetNonUpdateUsers(context.Context) ([]models.ExtUserData, error)
 
-	LoadTasks() (StorageTasks, error)
-	SaveTask(task models.Task) error
-	DeleteTask(id int) error
-	StartTaskTracking(models.TimeEntry) error
-	StopTaskTracking(models.TimeEntry) error
-	GetUserTaskSummary(int, time.Time, time.Time, string, time.Time) ([]models.TaskSummary, error)
+	LoadTasks(context.Context) (StorageTasks, error)
+	SaveTask(context.Context, models.Task) error
+	DeleteTask(context.Context, int) error
+	StartTaskTracking(context.Context, models.TimeEntry) error
+	StopTaskTracking(context.Context, models.TimeEntry) error
+	GetUserTaskSummary(context.Context, int, time.Time, time.Time, string, time.Time) ([]models.TaskSummary, error)
 
-	Ping() bool
+	Ping(context.Context) bool
 	Close() bool
 }
 
-func NewMemoryStorage(keeper Keeper, log Log) *MemoryStorage {
+func NewMemoryStorage(ctx context.Context, keeper Keeper, log Log) *MemoryStorage {
 
 	users := make(StorageUsers)
 	tasks := make(StorageTasks)
@@ -65,19 +67,20 @@ func NewMemoryStorage(keeper Keeper, log Log) *MemoryStorage {
 		var err error
 
 		// Load users
-		users, err = keeper.LoadUsers()
+		users, err = keeper.LoadUsers(ctx)
 		if err != nil {
 			log.Info("cannot load user data: ", zap.Error(err))
 		}
 
 		// Load tasks
-		tasks, err = keeper.LoadTasks()
+		tasks, err = keeper.LoadTasks(ctx)
 		if err != nil {
 			log.Info("cannot load task data: ", zap.Error(err))
 		}
 	}
 
 	return &MemoryStorage{
+		ctx:    ctx,
 		users:  users,
 		tasks:  tasks,
 		keeper: keeper,
@@ -85,9 +88,9 @@ func NewMemoryStorage(keeper Keeper, log Log) *MemoryStorage {
 	}
 }
 
-func (s *MemoryStorage) UpdateUsersInfo(result []models.ExtUserData) error {
+func (s *MemoryStorage) UpdateUsersInfo(ctx context.Context, result []models.ExtUserData) error {
 
-	err := s.keeper.UpdateUsersInfo(result)
+	err := s.keeper.UpdateUsersInfo(ctx, result)
 	if err != nil {
 		return err
 	}
@@ -109,14 +112,14 @@ func (s *MemoryStorage) UpdateUsersInfo(result []models.ExtUserData) error {
 	return nil
 }
 
-func (s *MemoryStorage) InsertUser(user models.User) error {
+func (s *MemoryStorage) InsertUser(ctx context.Context, user models.User) error {
 	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
 	if _, exists := s.users[key]; exists {
 		return ErrConflict
 	}
 
 	// Save the user to the keeper
-	if err := s.keeper.SaveUser(key, user); err != nil {
+	if err := s.keeper.SaveUser(ctx, key, user); err != nil {
 		return err
 	}
 
@@ -126,7 +129,7 @@ func (s *MemoryStorage) InsertUser(user models.User) error {
 	return nil
 }
 
-func (s *MemoryStorage) UpdateUser(user models.User) error {
+func (s *MemoryStorage) UpdateUser(ctx context.Context, user models.User) error {
 	// Формируем ключ для поиска пользователя в хранилище по серии и номеру паспорта
 	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
 
@@ -139,14 +142,14 @@ func (s *MemoryStorage) UpdateUser(user models.User) error {
 	s.users[key] = user
 
 	// Пытаемся обновить пользователя через keeper
-	if err := s.keeper.UpdateUser(user); err != nil {
+	if err := s.keeper.UpdateUser(ctx, user); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *MemoryStorage) GetUsers(filter models.Filter, pagination models.Pagination) ([]models.User, error) {
+func (s *MemoryStorage) GetUsers(ctx context.Context, filter models.Filter, pagination models.Pagination) ([]models.User, error) {
 	var result []models.User
 
 	for _, user := range s.users {
@@ -189,14 +192,14 @@ func (s *MemoryStorage) GetUsers(filter models.Filter, pagination models.Paginat
 	return result[start:end], nil
 }
 
-func (s *MemoryStorage) DeleteUser(passportSerie, passportNumber int) error {
+func (s *MemoryStorage) DeleteUser(ctx context.Context, passportSerie, passportNumber int) error {
 	key := fmt.Sprintf("%d %d", passportSerie, passportNumber)
 	if _, exists := s.users[key]; !exists {
 		return ErrNotFound
 	}
 
 	// Delete the user from the keeper
-	if err := s.keeper.DeleteUser(passportSerie, passportNumber); err != nil {
+	if err := s.keeper.DeleteUser(ctx, passportSerie, passportNumber); err != nil {
 		return err
 	}
 
@@ -206,8 +209,8 @@ func (s *MemoryStorage) DeleteUser(passportSerie, passportNumber int) error {
 	return nil
 }
 
-func (s *MemoryStorage) GetNonUpdateUsers() ([]models.ExtUserData, error) {
-	users, err := s.keeper.GetNonUpdateUsers()
+func (s *MemoryStorage) GetNonUpdateUsers(ctx context.Context) ([]models.ExtUserData, error) {
+	users, err := s.keeper.GetNonUpdateUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -215,13 +218,13 @@ func (s *MemoryStorage) GetNonUpdateUsers() ([]models.ExtUserData, error) {
 	return users, nil
 }
 
-func (s *MemoryStorage) InsertTask(task models.Task) error {
+func (s *MemoryStorage) InsertTask(ctx context.Context, task models.Task) error {
 	if _, exists := s.tasks[task.ID]; exists {
 		return ErrConflict
 	}
 
 	// Save the task to the keeper
-	if err := s.keeper.SaveTask(task); err != nil {
+	if err := s.keeper.SaveTask(ctx, task); err != nil {
 		return err
 	}
 
@@ -231,7 +234,7 @@ func (s *MemoryStorage) InsertTask(task models.Task) error {
 	return nil
 }
 
-func (s *MemoryStorage) UpdateTask(task models.Task) error {
+func (s *MemoryStorage) UpdateTask(ctx context.Context, task models.Task) error {
 	if _, exists := s.tasks[task.ID]; !exists {
 		return ErrNotFound
 	}
@@ -239,7 +242,7 @@ func (s *MemoryStorage) UpdateTask(task models.Task) error {
 	return nil
 }
 
-func (s *MemoryStorage) GetTasks(filter models.TaskFilter, pagination models.Pagination) ([]models.Task, error) {
+func (s *MemoryStorage) GetTasks(ctx context.Context, filter models.TaskFilter, pagination models.Pagination) ([]models.Task, error) {
 	var result []models.Task
 
 	for _, task := range s.tasks {
@@ -267,13 +270,13 @@ func (s *MemoryStorage) GetTasks(filter models.TaskFilter, pagination models.Pag
 	return result[start:end], nil
 }
 
-func (s *MemoryStorage) DeleteTask(id int) error {
+func (s *MemoryStorage) DeleteTask(ctx context.Context, id int) error {
 	if _, exists := s.tasks[id]; !exists {
 		return ErrNotFound
 	}
 
 	// Delete the task from the keeper
-	if err := s.keeper.DeleteTask(id); err != nil {
+	if err := s.keeper.DeleteTask(ctx, id); err != nil {
 		return err
 	}
 
@@ -283,8 +286,8 @@ func (s *MemoryStorage) DeleteTask(id int) error {
 	return nil
 }
 
-func (s *MemoryStorage) StartTaskTracking(entry models.TimeEntry) error {
-	err := s.keeper.StartTaskTracking(entry)
+func (s *MemoryStorage) StartTaskTracking(ctx context.Context, entry models.TimeEntry) error {
+	err := s.keeper.StartTaskTracking(ctx, entry)
 	if err != nil {
 		return err
 	}
@@ -292,8 +295,8 @@ func (s *MemoryStorage) StartTaskTracking(entry models.TimeEntry) error {
 	return nil
 }
 
-func (s *MemoryStorage) StopTaskTracking(entry models.TimeEntry) error {
-	err := s.keeper.StopTaskTracking(entry)
+func (s *MemoryStorage) StopTaskTracking(ctx context.Context, entry models.TimeEntry) error {
+	err := s.keeper.StopTaskTracking(ctx, entry)
 	if err != nil {
 		return err
 	}
@@ -301,8 +304,8 @@ func (s *MemoryStorage) StopTaskTracking(entry models.TimeEntry) error {
 	return nil
 }
 
-func (s *MemoryStorage) GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error) {
-	summary, err := s.keeper.GetUserTaskSummary(userID, startDate, endDate, userTimezone, defaultEndTime)
+func (s *MemoryStorage) GetUserTaskSummary(ctx context.Context, userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error) {
+	summary, err := s.keeper.GetUserTaskSummary(ctx, userID, startDate, endDate, userTimezone, defaultEndTime)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +313,7 @@ func (s *MemoryStorage) GetUserTaskSummary(userID int, startDate, endDate time.T
 	return summary, nil
 }
 
-func (s *MemoryStorage) GetUser(passportSerie, passportNumber int) (models.User, error) {
+func (s *MemoryStorage) GetUser(ctx context.Context, passportSerie, passportNumber int) (models.User, error) {
 	s.umx.RLock()
 	defer s.umx.RUnlock()
 
@@ -323,34 +326,10 @@ func (s *MemoryStorage) GetUser(passportSerie, passportNumber int) (models.User,
 	return v, nil
 }
 
-// func (s *MemoryStorage) InsertUser(k string,
-//     v models.User,
-// ) (models.User, error) {
-//     nv, err := s.SaveUser(k, v)
-//     if err != nil {
-//         return nv, err
-//     }
-
-//     s.umx.Lock()
-//     defer s.umx.Unlock()
-
-//     s.users[k] = nv
-
-//     return nv, nil
-// }
-
-// func (s *MemoryStorage) SaveUser(k string, v models.User) (models.User, error) {
-//     if s.keeper == nil {
-//         return v, nil
-//     }
-
-//     return s.keeper.SaveUser(k, v)
-// }
-
-func (s *MemoryStorage) GetBaseConnection() bool {
+func (s *MemoryStorage) GetBaseConnection(ctx context.Context) bool {
 	if s.keeper == nil {
 		return false
 	}
 
-	return s.keeper.Ping()
+	return s.keeper.Ping(ctx)
 }

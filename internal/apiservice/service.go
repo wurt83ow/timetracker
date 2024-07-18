@@ -22,8 +22,8 @@ type Log interface {
 }
 
 type Storage interface {
-	GetNonUpdateUsers() ([]models.ExtUserData, error)
-	UpdateUsersInfo([]models.ExtUserData) error
+	GetNonUpdateUsers(context.Context) ([]models.ExtUserData, error)
+	UpdateUsersInfo(context.Context, []models.ExtUserData) error
 }
 
 type Pool interface {
@@ -32,6 +32,7 @@ type Pool interface {
 }
 
 type ApiService struct {
+	ctx          context.Context
 	results      chan interface{}
 	wg           sync.WaitGroup
 	cancelFunc   context.CancelFunc
@@ -42,7 +43,7 @@ type ApiService struct {
 	taskInterval int
 }
 
-func NewApiService(external External, pool Pool, storage Storage,
+func NewApiService(ctx context.Context, external External, pool Pool, storage Storage,
 	log Log, taskInterval func() string,
 ) *ApiService {
 	taskInt, err := strconv.Atoi(taskInterval())
@@ -53,6 +54,7 @@ func NewApiService(external External, pool Pool, storage Storage,
 	}
 
 	return &ApiService{
+		ctx:          ctx,
 		results:      make(chan interface{}),
 		wg:           sync.WaitGroup{},
 		cancelFunc:   nil,
@@ -64,14 +66,10 @@ func NewApiService(external External, pool Pool, storage Storage,
 	}
 }
 
-// starts a worker.
 func (a *ApiService) Start() {
-	ctx := context.Background()
-	ctx, canselFunc := context.WithCancel(ctx)
-	a.cancelFunc = canselFunc
+	a.ctx, a.cancelFunc = context.WithCancel(a.ctx)
 	a.wg.Add(1)
-
-	go a.UpdateUsers(ctx)
+	go a.UpdateUsers(a.ctx)
 }
 
 func (a *ApiService) Stop() {
@@ -100,7 +98,7 @@ func (a *ApiService) UpdateUsers(ctx context.Context) {
 			}
 		case <-t.C:
 
-			users, err := a.storage.GetNonUpdateUsers()
+			users, err := a.storage.GetNonUpdateUsers(ctx)
 			fmt.Println("77777777777777", users)
 			if err != nil {
 
@@ -131,13 +129,13 @@ func (a *ApiService) CreateUsersTask(users []models.ExtUserData) {
 	var task *workerpool.Task
 
 	for _, user := range users {
- 
+
 		task = workerpool.NewTask(func(data interface{}) error {
 
 			usr, ok := data.(models.ExtUserData)
 			if ok { // type assertion failed
 				usrinfo, err := a.external.GetUserInfo(usr.PassportSerie, usr.PassportNumber)
-				 
+
 				if err != nil {
 					return fmt.Errorf("failed to create order task: %w", err)
 				}
@@ -154,7 +152,7 @@ func (a *ApiService) CreateUsersTask(users []models.ExtUserData) {
 func (a *ApiService) doWork(result []models.ExtUserData) {
 	// perform a group update of the users table (field Surname, Name, Address)
 	fmt.Println("8888888888888888888888888888", result)
-	err := a.storage.UpdateUsersInfo(result)
+	err := a.storage.UpdateUsersInfo(a.ctx, result)
 	if err != nil {
 		a.log.Info("errors when updating order status: ", zap.Error(err))
 	}

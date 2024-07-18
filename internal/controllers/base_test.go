@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -21,68 +22,68 @@ type MockStorage struct {
 	mock.Mock
 }
 
-func (m *MockStorage) GetBaseConnection() bool {
-	args := m.Called()
+func (m *MockStorage) GetBaseConnection(ctx context.Context) bool {
+	args := m.Called(ctx)
 	return args.Bool(0)
 }
 
-func (m *MockStorage) InsertUser(user models.User) error {
-	args := m.Called(user)
+func (m *MockStorage) InsertUser(ctx context.Context, user models.User) error {
+	args := m.Called(ctx, user)
 	return args.Error(0)
 }
 
-func (m *MockStorage) UpdateUser(user models.User) error {
-	args := m.Called(user)
+func (m *MockStorage) UpdateUser(ctx context.Context, user models.User) error {
+	args := m.Called(ctx, user)
 	return args.Error(0)
 }
 
-func (m *MockStorage) DeleteUser(passportSerie int, passportNumber int) error {
-	args := m.Called(passportSerie, passportNumber)
+func (m *MockStorage) DeleteUser(ctx context.Context, passportSerie int, passportNumber int) error {
+	args := m.Called(ctx, passportSerie, passportNumber)
 	return args.Error(0)
 }
 
-func (m *MockStorage) GetUsers(filter models.Filter, pagination models.Pagination) ([]models.User, error) {
-	args := m.Called(filter, pagination)
+func (m *MockStorage) GetUsers(ctx context.Context, filter models.Filter, pagination models.Pagination) ([]models.User, error) {
+	args := m.Called(ctx, filter, pagination)
 	return args.Get(0).([]models.User), args.Error(1)
 }
 
-func (m *MockStorage) InsertTask(task models.Task) error {
-	args := m.Called(task)
+func (m *MockStorage) InsertTask(ctx context.Context, task models.Task) error {
+	args := m.Called(ctx, task)
 	return args.Error(0)
 }
 
-func (m *MockStorage) UpdateTask(task models.Task) error {
-	args := m.Called(task)
+func (m *MockStorage) UpdateTask(ctx context.Context, task models.Task) error {
+	args := m.Called(ctx, task)
 	return args.Error(0)
 }
 
-func (m *MockStorage) DeleteTask(taskID int) error {
-	args := m.Called(taskID)
+func (m *MockStorage) DeleteTask(ctx context.Context, taskID int) error {
+	args := m.Called(ctx, taskID)
 	return args.Error(0)
 }
 
-func (m *MockStorage) GetTasks(filter models.TaskFilter, pagination models.Pagination) ([]models.Task, error) {
-	args := m.Called(filter, pagination)
+func (m *MockStorage) GetTasks(ctx context.Context, filter models.TaskFilter, pagination models.Pagination) ([]models.Task, error) {
+	args := m.Called(ctx, filter, pagination)
 	return args.Get(0).([]models.Task), args.Error(1)
 }
 
-func (m *MockStorage) StartTaskTracking(entry models.TimeEntry) error {
-	args := m.Called(entry)
+func (m *MockStorage) StartTaskTracking(ctx context.Context, entry models.TimeEntry) error {
+	args := m.Called(ctx, entry)
 	return args.Error(0)
 }
 
-func (m *MockStorage) StopTaskTracking(entry models.TimeEntry) error {
-	args := m.Called(entry)
+func (m *MockStorage) StopTaskTracking(ctx context.Context, entry models.TimeEntry) error {
+	args := m.Called(ctx, entry)
 	return args.Error(0)
 }
 
-func (m *MockStorage) GetUserTaskSummary(userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error) {
-	args := m.Called(userID, startDate, endDate, userTimezone, defaultEndTime)
+func (m *MockStorage) GetUserTaskSummary(ctx context.Context, userID int, startDate, endDate time.Time, userTimezone string, defaultEndTime time.Time) ([]models.TaskSummary, error) {
+	args := m.Called(ctx, userID, startDate, endDate, userTimezone, defaultEndTime)
 	return args.Get(0).([]models.TaskSummary), args.Error(1)
 }
 
-func (m *MockStorage) GetUser(passportSerie int, passportNumber int) (models.User, error) {
-	args := m.Called(passportSerie, passportNumber)
+func (m *MockStorage) GetUser(ctx context.Context, passportSerie int, passportNumber int) (models.User, error) {
+	args := m.Called(ctx, passportSerie, passportNumber)
 	return args.Get(0).(models.User), args.Error(1)
 }
 
@@ -126,12 +127,12 @@ func TestBaseController_Register(t *testing.T) {
 	storage := new(MockStorage)
 	authz := new(MockAuthz)
 	log := new(MockLog)
-
-	controller := NewBaseController(storage, nil, log, authz)
+	ctx := context.Background()
+	controller := NewBaseController(ctx, storage, nil, log, authz)
 
 	// Mock responses
-	storage.On("GetUser", mock.Anything, mock.Anything).Return(models.User{}, errors.New("not found"))
-	storage.On("InsertUser", mock.Anything).Return(nil)
+	storage.On("GetUser", ctx, mock.Anything, mock.Anything).Return(models.User{}, errors.New("not found"))
+	storage.On("InsertUser", ctx, mock.Anything).Return(nil)
 	authz.On("GetHash", mock.Anything, mock.Anything).Return([]byte("hashedPassword"))
 	authz.On("CreateJWTTokenForUser", mock.Anything).Return("jwtToken")
 
@@ -149,10 +150,10 @@ func TestBaseController_Register(t *testing.T) {
 
 		req, _ := http.NewRequest("POST", "/api/user/register", bytes.NewBuffer(payload))
 		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req.WithContext(ctx))
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		storage.AssertCalled(t, "InsertUser", mock.Anything)
+		storage.AssertCalled(t, "InsertUser", ctx, mock.Anything)
 	})
 
 	t.Run("Bad Request", func(t *testing.T) {
@@ -160,7 +161,7 @@ func TestBaseController_Register(t *testing.T) {
 
 		req, _ := http.NewRequest("POST", "/api/user/register", bytes.NewBuffer(payload))
 		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req.WithContext(ctx))
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
@@ -170,11 +171,11 @@ func TestBaseController_Login(t *testing.T) {
 	storage := new(MockStorage)
 	authz := new(MockAuthz)
 	log := new(MockLog)
-
-	controller := NewBaseController(storage, nil, log, authz)
+	ctx := context.Background()
+	controller := NewBaseController(ctx, storage, nil, log, authz)
 
 	// Mock responses for successful login
-	storage.On("GetUser", 1234, 567890).Return(models.User{
+	storage.On("GetUser", ctx, 1234, 567890).Return(models.User{
 		Hash: []byte("hashedPassword"),
 	}, nil)
 	authz.On("GetHash", "1234 567890", "password123").Return([]byte("hashedPassword"))
@@ -194,13 +195,13 @@ func TestBaseController_Login(t *testing.T) {
 
 		req, _ := http.NewRequest("POST", "/api/user/login", bytes.NewBuffer(payload))
 		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req.WithContext(ctx))
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
 	// Mock responses for unauthorized login
-	storage.On("GetUser", 1234, 567890).Return(models.User{}, errors.New("not found"))
+	storage.On("GetUser", ctx, 1234, 567890).Return(models.User{}, errors.New("not found"))
 	authz.On("GetHash", "1234 567890", "wrongpassword").Return([]byte("wronghashedPassword"))
 
 	t.Run("Unauthorized", func(t *testing.T) {
@@ -212,7 +213,7 @@ func TestBaseController_Login(t *testing.T) {
 
 		req, _ := http.NewRequest("POST", "/api/user/login", bytes.NewBuffer(payload))
 		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req.WithContext(ctx))
 
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})

@@ -36,7 +36,7 @@ func NewServer(ctx context.Context) *Server {
 	return server
 }
 
-// !!! Заменить  на .dev и conf
+// !!! Заменить на .dev и conf
 func ApiSystemAddress() string {
 	return "localhost:8081"
 }
@@ -63,21 +63,20 @@ func (server *Server) Serve() {
 	defer keeper.Close()
 
 	// initialize the storage instance
-	memoryStorage := initializeStorage(keeper, nLogger)
+	memoryStorage := initializeStorage(server.ctx, keeper, nLogger)
 	if memoryStorage == nil {
 		nLogger.Debug("Failed to initialize storage")
 	}
 
 	// create a new workerpool for concurrency task processing
 	var allTask []*workerpool.Task
-	pool := workerpool.NewPool(allTask, option.Concurrency,
-		nLogger, option.TaskExecutionInterval)
+	pool := initializeWorkerPool(allTask, option, nLogger)
 
 	// create a new NewJWTAuthz for user authorization
-	authz := authz.NewJWTAuthz(option.JWTSigningKey(), nLogger)
+	authz := initializeAuthz(option, nLogger)
 
 	// create a new controller to process incoming requests
-	basecontr := initializeBaseController(memoryStorage, option, nLogger, authz)
+	basecontr := initializeBaseController(server.ctx, memoryStorage, option, nLogger, authz)
 
 	// get a middleware for logging requests
 	reqLog := middleware.NewReqLog(nLogger)
@@ -86,12 +85,10 @@ func (server *Server) Serve() {
 	go pool.RunBackground()
 
 	// create a new controller for creating outgoing requests
-	extcontr := controllers.NewExtController(memoryStorage,
-		ApiSystemAddress, nLogger)
+	extcontr := initializeExtController(server.ctx, memoryStorage, nLogger)
 
-	apiServise := apiservice.NewApiService(extcontr, pool, memoryStorage,
-		nLogger, option.TaskExecutionInterval)
-	apiServise.Start()
+	apiService := initializeApiService(server.ctx, extcontr, pool, memoryStorage, nLogger, option)
+	apiService.Start()
 
 	// create router and mount routes
 	r := chi.NewRouter()
@@ -124,19 +121,36 @@ func initializeKeeper(dataBaseDSN func() string, logger *logger.Logger, userUpda
 	return bdkeeper.NewBDKeeper(dataBaseDSN, logger, userUpdateInterval)
 }
 
-func initializeStorage(keeper storage.Keeper, logger *logger.Logger) *storage.MemoryStorage {
+func initializeStorage(ctx context.Context, keeper storage.Keeper, logger *logger.Logger) *storage.MemoryStorage {
 	if keeper == nil {
 		logger.Warn("Keeper is nil, cannot initialize storage")
 		return nil
 	}
 
-	return storage.NewMemoryStorage(keeper, logger)
+	return storage.NewMemoryStorage(ctx, keeper, logger)
 }
 
-func initializeBaseController(storage *storage.MemoryStorage, option *config.Options,
+func initializeBaseController(ctx context.Context, storage *storage.MemoryStorage, option *config.Options,
 	logger *logger.Logger, authz *authz.JWTAuthz,
 ) *controllers.BaseController {
-	return controllers.NewBaseController(storage, option, logger, authz)
+	return controllers.NewBaseController(ctx, storage, option, logger, authz)
+}
+
+func initializeWorkerPool(allTask []*workerpool.Task, option *config.Options, logger *logger.Logger) *workerpool.Pool {
+	return workerpool.NewPool(allTask, option.Concurrency, logger, option.TaskExecutionInterval)
+}
+
+func initializeAuthz(option *config.Options, logger *logger.Logger) *authz.JWTAuthz {
+	return authz.NewJWTAuthz(option.JWTSigningKey(), logger)
+}
+
+func initializeExtController(ctx context.Context, storage *storage.MemoryStorage, logger *logger.Logger) *controllers.ExtController {
+	return controllers.NewExtController(ctx, storage, ApiSystemAddress, logger)
+}
+
+func initializeApiService(ctx context.Context, extcontr *controllers.ExtController, pool *workerpool.Pool, memoryStorage *storage.MemoryStorage, logger *logger.Logger, option *config.Options) *apiservice.ApiService {
+	apiService := apiservice.NewApiService(ctx, extcontr, pool, memoryStorage, logger, option.TaskExecutionInterval)
+	return apiService
 }
 
 func startServer(router chi.Router, address string) *http.Server {
