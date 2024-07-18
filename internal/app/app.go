@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -22,7 +21,6 @@ import (
 	"github.com/wurt83ow/timetracker/internal/middleware"
 	"github.com/wurt83ow/timetracker/internal/storage"
 	"github.com/wurt83ow/timetracker/internal/workerpool"
-	"go.uber.org/zap"
 )
 
 type Server struct {
@@ -47,15 +45,12 @@ func (server *Server) Serve() {
 	// create and initialize a new option instance
 	option := config.NewOptions()
 	option.ParseFlags()
-	fmt.Println(option.LogLevel())
 
 	// get a new logger
 	nLogger, err := logger.NewLogger(option.LogLevel())
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	nLogger.Info("This is Info", zap.Error(err))
 
 	// initialize the keeper instance
 	keeper := initializeKeeper(option.DataBaseDSN, nLogger, option.UserUpdateInterval)
