@@ -190,7 +190,7 @@ func (server *Server) Shutdown() {
 	log.Printf("server stopped")
 
 	const shutdownTimeout = 5 * time.Second
-	ctxShutDown, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	ctxShutDown, cancel := context.WithTimeout(server.ctx, shutdownTimeout)
 
 	defer cancel()
 
