@@ -12,7 +12,9 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file" // registers a migrate driver.
-	_ "github.com/jackc/pgx/v5/stdlib"                   // registers a pgx driver.
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/lib/pq"
 	"github.com/wurt83ow/timetracker/internal/models"
 	"github.com/wurt83ow/timetracker/internal/storage"
@@ -25,7 +27,7 @@ type Log interface {
 }
 
 type BDKeeper struct {
-	conn               *sql.DB
+	pool               *pgxpool.Pool
 	log                Log
 	userUpdateInterval func() string
 }
@@ -37,13 +39,26 @@ func NewBDKeeper(dsn func() string, log Log, userUpdateInterval func() string) *
 		return nil
 	}
 
-	conn, err := sql.Open("pgx", addr)
+	config, err := pgxpool.ParseConfig(addr)
+	if err != nil {
+		log.Info("Unable to parse database DSN: ", zap.Error(err))
+		return nil
+	}
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		log.Info("Unable to connect to database: ", zap.Error(err))
 		return nil
 	}
 
-	driver, err := postgres.WithInstance(conn, new(postgres.Config))
+	connConfig, err := pgx.ParseConfig(addr)
+	if err != nil {
+		log.Info("Unable to parse connection string: %v\n")
+	}
+	// Зарегистрируйте драйвер с именем pgx
+	sqlDB := stdlib.OpenDB(*connConfig)
+
+	driver, err := postgres.WithInstance(sqlDB, &postgres.Config{})
 	if err != nil {
 		log.Info("Error getting driver: ", zap.Error(err))
 		return nil
@@ -81,23 +96,19 @@ func NewBDKeeper(dsn func() string, log Log, userUpdateInterval func() string) *
 	log.Info("Connected!")
 
 	return &BDKeeper{
-		conn:               conn,
+		pool:               pool,
 		log:                log,
 		userUpdateInterval: userUpdateInterval,
 	}
 }
 
 func (kp *BDKeeper) Close() bool {
-	if kp.conn != nil {
-		err := kp.conn.Close()
-		if err != nil {
-			kp.log.Info("Failed to close database connection", zap.Error(err))
-			return false
-		}
-		kp.log.Info("Database connection closed")
+	if kp.pool != nil {
+		kp.pool.Close()
+		kp.log.Info("Database connection pool closed")
 		return true
 	}
-	kp.log.Info("Attempted to close a nil database connection")
+	kp.log.Info("Attempted to close a nil database connection pool")
 	return false
 }
 
@@ -116,7 +127,8 @@ func (bd *BDKeeper) SaveUser(ctx context.Context, key string, user models.User) 
         ON CONFLICT (passportSerie, passportNumber) DO NOTHING
     `
 
-	_, err := bd.conn.Exec(
+	_, err := bd.pool.Exec(
+		ctx,
 		query,
 		user.PassportSerie,
 		user.PassportNumber,
@@ -168,7 +180,7 @@ func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserD
 	thresholdTime := currentTime.Add(-updateInterval)
 
 	// Начало транзакции
-	tx, err := bd.conn.Begin()
+	tx, err := bd.pool.Begin(ctx)
 	if err != nil {
 		bd.log.Info("Ошибка при начале транзакции: ", zap.Error(err))
 		return err
@@ -176,10 +188,10 @@ func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserD
 
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			tx.Rollback(ctx)
 			bd.log.Info("Транзакция отменена: ", zap.Error(err))
 		} else {
-			err = tx.Commit()
+			err = tx.Commit(ctx)
 			if err != nil {
 				bd.log.Info("Ошибка при фиксации транзакции: ", zap.Error(err))
 			} else {
@@ -208,6 +220,7 @@ func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserD
     `
 	// Выполнение запроса с использованием pgx
 	_, err = tx.Exec(
+		ctx,
 		query,
 		passportSeries,
 		passportNumbers,
@@ -239,7 +252,8 @@ func (bd *BDKeeper) UpdateUser(ctx context.Context, user models.User) error {
             last_checked_at = $11
         WHERE passportSerie = $2 AND passportNumber = $3
     `
-	_, err := bd.conn.Exec(
+	_, err := bd.pool.Exec(
+		ctx,
 		query,
 		user.UUID,
 		user.PassportSerie,
@@ -281,7 +295,7 @@ func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error)
     FROM
         Users`
 
-	rows, err := kp.conn.QueryContext(ctx, sql)
+	rows, err := kp.pool.Query(ctx, sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load users: %w", err)
 	}
@@ -340,7 +354,7 @@ func (kp *BDKeeper) DeleteUser(ctx context.Context, passportSerie, passportNumbe
         WHERE passportSerie = $1 AND passportNumber = $2
     `
 
-	_, err := kp.conn.ExecContext(ctx, query, passportSerie, passportNumber)
+	_, err := kp.pool.Exec(ctx, query, passportSerie, passportNumber)
 	if err != nil {
 		kp.log.Info("error deleting user from database: ", zap.Error(err))
 		return err
@@ -376,7 +390,7 @@ func (kp *BDKeeper) GetNonUpdateUsers(ctx context.Context) ([]models.ExtUserData
         last_checked_at IS NULL OR last_checked_at <= $1
     LIMIT 100`
 
-	rows, err := kp.conn.QueryContext(ctx, sql, thresholdTime)
+	rows, err := kp.pool.Query(ctx, sql, thresholdTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get non-updated users: %w", err)
 	}
@@ -419,7 +433,8 @@ func (bd *BDKeeper) SaveTask(ctx context.Context, task models.Task) error {
         )
     `
 
-	_, err := bd.conn.Exec(
+	_, err := bd.pool.Exec(
+		ctx,
 		query,
 		task.Name,
 		task.Description,
@@ -445,7 +460,7 @@ func (kp *BDKeeper) LoadTasks(ctx context.Context) (storage.StorageTasks, error)
     FROM
         tasks`
 
-	rows, err := kp.conn.QueryContext(ctx, sql)
+	rows, err := kp.pool.Query(ctx, sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load tasks: %w", err)
 	}
@@ -484,7 +499,7 @@ func (kp *BDKeeper) DeleteTask(ctx context.Context, id int) error {
         WHERE id = $1
     `
 
-	_, err := kp.conn.ExecContext(ctx, query, id)
+	_, err := kp.pool.Exec(ctx, query, id)
 	if err != nil {
 		kp.log.Info("error deleting task from database: ", zap.Error(err))
 		return err
@@ -509,7 +524,7 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
         SELECT id FROM user_tasks
         WHERE user_id = $1 AND task_id = $2 AND event_date = $3 AND end_time IS NULL
     `
-	err = bd.conn.QueryRow(query, entry.UserID, entry.TaskID, entry.EventDate).Scan(&existingTaskID)
+	err = bd.pool.QueryRow(ctx, query, entry.UserID, entry.TaskID, entry.EventDate).Scan(&existingTaskID)
 	if err != nil && err != sql.ErrNoRows {
 		bd.log.Info("error checking existing task in database: ", zap.Error(err))
 		return err
@@ -524,7 +539,7 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
         INSERT INTO user_tasks (user_id, task_id, event_date, start_time)
         VALUES ($1, $2, $3, $4)
     `
-	_, err = bd.conn.Exec(insertQuery, entry.UserID, entry.TaskID, entry.EventDate, startTime)
+	_, err = bd.pool.Exec(ctx, insertQuery, entry.UserID, entry.TaskID, entry.EventDate, startTime)
 	if err != nil {
 		bd.log.Info("error saving task tracking to database: ", zap.Error(err))
 		return err
@@ -549,7 +564,7 @@ func (bd *BDKeeper) StopTaskTracking(ctx context.Context, entry models.TimeEntry
         SELECT id FROM user_tasks
         WHERE user_id = $1 AND task_id = $2 AND event_date = $3 AND end_time IS NULL
     `
-	rows, err := bd.conn.Query(query, entry.UserID, entry.TaskID, entry.EventDate)
+	rows, err := bd.pool.Query(ctx, query, entry.UserID, entry.TaskID, entry.EventDate)
 	if err != nil {
 		bd.log.Info("error checking existing task in database: ", zap.Error(err))
 		return err
@@ -576,7 +591,7 @@ func (bd *BDKeeper) StopTaskTracking(ctx context.Context, entry models.TimeEntry
         SET end_time = $1
         WHERE id = $2
     `
-	_, err = bd.conn.Exec(updateQuery, endTime, id)
+	_, err = bd.pool.Exec(ctx, updateQuery, endTime, id)
 	if err != nil {
 		bd.log.Info("error updating task tracking in database: ", zap.Error(err))
 		return err
@@ -598,7 +613,7 @@ func (bd *BDKeeper) GetUserTaskSummary(ctx context.Context, userID int, startDat
         FROM user_tasks
         WHERE user_id = $1 AND event_date BETWEEN $2 AND $3
     `
-	rows, err := bd.conn.Query(query, userID, startDate, endDate)
+	rows, err := bd.pool.Query(ctx, query, userID, startDate, endDate)
 	if err != nil {
 		bd.log.Info("error querying task summary: ", zap.Error(err))
 		return nil, err
@@ -649,7 +664,7 @@ func (kp *BDKeeper) Ping(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond) // Увеличил время до 1 миллисекунды, так как 1 микросекунда слишком короткое время
 	defer cancel()
 
-	if err := kp.conn.PingContext(ctx); err != nil {
+	if err := kp.pool.Ping(ctx); err != nil {
 		return false
 	}
 
