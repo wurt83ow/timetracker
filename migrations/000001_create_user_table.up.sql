@@ -9,6 +9,6 @@ CREATE TABLE Users (
     default_end_time TIME WITH TIME ZONE,
     timezone VARCHAR(50),    
     password_hash VARCHAR(255),
-    last_checked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_checked_at TIMESTAMP WITH TIME ZONE,
     UNIQUE (passportSerie, passportNumber)
 );

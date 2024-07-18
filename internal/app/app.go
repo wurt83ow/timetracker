@@ -38,7 +38,7 @@ func NewServer(ctx context.Context) *Server {
 
 // !!! Заменить  на .dev и conf
 func ApiSystemAddress() string {
-	return ":8081"
+	return "localhost:8081"
 }
 
 func (server *Server) Serve() {

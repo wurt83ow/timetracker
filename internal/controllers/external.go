@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/wurt83ow/timetracker/internal/models"
 	"go.uber.org/zap"
@@ -29,7 +30,14 @@ func NewExtController(storage Storage, extAddr func() string, log Log) *ExtContr
 }
 
 func (c *ExtController) GetUserInfo(passportSerie int, passportNumber int) (models.ExtUserData, error) {
+
 	addr := c.extAddr()
+
+	// Добавление http схемы если она отсутствует
+	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
+		addr = "http://" + addr
+	}
+
 	if string(addr[len(addr)-1]) != "/" {
 		addr = addr + "/"
 	}
@@ -53,6 +61,9 @@ func (c *ExtController) GetUserInfo(passportSerie int, passportNumber int) (mode
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		return models.ExtUserData{}, err
 	}
+
+	userInfo.PassportSerie = passportSerie
+	userInfo.PassportNumber = passportNumber
 
 	return userInfo, nil
 }

@@ -81,14 +81,14 @@ func (a *ApiService) Stop() {
 
 func (a *ApiService) UpdateUsers(ctx context.Context) {
 	t := time.NewTicker(time.Duration(a.taskInterval) * time.Millisecond)
-
+	fmt.Println("77777777777777", a.taskInterval)
 	result := make([]models.ExtUserData, 0)
 
 	var dmx sync.RWMutex
 
 	dmx.RLock()
 	defer dmx.RUnlock()
-	 
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -99,9 +99,11 @@ func (a *ApiService) UpdateUsers(ctx context.Context) {
 				result = append(result, j)
 			}
 		case <-t.C:
-			 
+
 			users, err := a.storage.GetNonUpdateUsers()
+			fmt.Println("77777777777777", users)
 			if err != nil {
+
 				return
 			}
 
@@ -129,12 +131,13 @@ func (a *ApiService) CreateUsersTask(users []models.ExtUserData) {
 	var task *workerpool.Task
 
 	for _, user := range users {
-
+ 
 		task = workerpool.NewTask(func(data interface{}) error {
-			 
+
 			usr, ok := data.(models.ExtUserData)
 			if ok { // type assertion failed
 				usrinfo, err := a.external.GetUserInfo(usr.PassportSerie, usr.PassportNumber)
+				 
 				if err != nil {
 					return fmt.Errorf("failed to create order task: %w", err)
 				}
@@ -150,6 +153,7 @@ func (a *ApiService) CreateUsersTask(users []models.ExtUserData) {
 
 func (a *ApiService) doWork(result []models.ExtUserData) {
 	// perform a group update of the users table (field Surname, Name, Address)
+	fmt.Println("8888888888888888888888888888", result)
 	err := a.storage.UpdateUsersInfo(result)
 	if err != nil {
 		a.log.Info("errors when updating order status: ", zap.Error(err))

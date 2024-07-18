@@ -13,6 +13,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file" // registers a migrate driver.
 	_ "github.com/jackc/pgx/v5/stdlib"                   // registers a pgx driver.
+	"github.com/lib/pq"
 	"github.com/wurt83ow/timetracker/internal/models"
 	"github.com/wurt83ow/timetracker/internal/storage"
 	"go.uber.org/zap"
@@ -108,9 +109,9 @@ func (bd *BDKeeper) SaveUser(key string, user models.User) error {
 	query := `
         INSERT INTO Users (
             passportSerie, passportNumber, surname, name, patronymic, address,
-            default_end_time, timezone, password_hash, last_checked_at
+            default_end_time, timezone, password_hash
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+            $1, $2, $3, $4, $5, $6, $7, $8, $9
         )
         ON CONFLICT (passportSerie, passportNumber) DO NOTHING
     `
@@ -126,7 +127,6 @@ func (bd *BDKeeper) SaveUser(key string, user models.User) error {
 		user.DefaultEndTime,
 		user.Timezone,
 		passwordHash,
-		user.LastCheckedAt,
 	)
 	if err != nil {
 		bd.log.Info("error saving user to database: ", zap.Error(err))
@@ -157,6 +157,37 @@ func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
 		addresses[i] = user.Address
 	}
 
+	// Чтение интервала из переменной окружения
+	updateInterval, err := time.ParseDuration(bd.userUpdateInterval())
+	if err != nil {
+		return fmt.Errorf("failed to parse USER_UPDATE_INTERVAL: %w", err)
+	}
+
+	// Получение текущего времени и вычисление порогового времени
+	currentTime := time.Now().UTC()
+	thresholdTime := currentTime.Add(-updateInterval)
+
+	// Начало транзакции
+	tx, err := bd.conn.Begin()
+	if err != nil {
+		bd.log.Info("Ошибка при начале транзакции: ", zap.Error(err))
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+			bd.log.Info("Транзакция отменена: ", zap.Error(err))
+		} else {
+			err = tx.Commit()
+			if err != nil {
+				bd.log.Info("Ошибка при фиксации транзакции: ", zap.Error(err))
+			} else {
+				bd.log.Info("Транзакция успешно зафиксирована")
+			}
+		}
+	}()
+
 	query := `
         UPDATE Users SET
             surname = updated.surname,
@@ -173,16 +204,17 @@ func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
         ) AS updated
         WHERE Users.passportSerie = updated.passportSerie
         AND Users.passportNumber = updated.passportNumber
+        AND (Users.last_checked_at IS NULL OR Users.last_checked_at <= $6)
     `
-
 	// Выполнение запроса с использованием pgx
-	_, err := bd.conn.Exec(
+	_, err = tx.Exec(
 		query,
 		passportSeries,
 		passportNumbers,
 		surnames,
 		names,
 		addresses,
+		thresholdTime,
 	)
 	if err != nil {
 		bd.log.Info("Ошибка при пакетном обновлении данных пользователей в базе данных: ", zap.Error(err))
@@ -194,6 +226,7 @@ func (bd *BDKeeper) UpdateUsersInfo(users []models.ExtUserData) error {
 }
 
 func (bd *BDKeeper) UpdateUser(user models.User) error {
+
 	query := `
         UPDATE Users SET
             surname = $4,
@@ -264,6 +297,8 @@ func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 
 	for rows.Next() {
 		var m models.User
+		var defaultEndTime pq.NullTime
+		var lastCheckedAt pq.NullTime
 
 		err := rows.Scan(
 			&m.UUID,
@@ -273,13 +308,23 @@ func (kp *BDKeeper) LoadUsers() (storage.StorageUsers, error) {
 			&m.Name,
 			&m.Patronymic,
 			&m.Address,
-			&m.DefaultEndTime,
+			&defaultEndTime,
 			&m.Timezone,
 			&m.Hash,
-			&m.LastCheckedAt,
+			&lastCheckedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load users: %w", err)
+		}
+
+		// Устанавливаем поле DefaultEndTime только если значение из базы данных не NULL
+		if defaultEndTime.Valid {
+			m.DefaultEndTime = defaultEndTime.Time
+		}
+
+		// Устанавливаем поле LastCheckedAt только если значение из базы данных не NULL
+		if lastCheckedAt.Valid {
+			m.LastCheckedAt = lastCheckedAt.Time
 		}
 
 		key := fmt.Sprintf("%d %d", m.PassportSerie, m.PassportNumber)
@@ -308,19 +353,20 @@ func (kp *BDKeeper) DeleteUser(passportSerie, passportNumber int) error {
 }
 
 func (kp *BDKeeper) GetNonUpdateUsers() ([]models.ExtUserData, error) {
+
 	ctx := context.Background()
 
-	// Read the interval from environment variable
+	// Чтение интервала из переменной окружения
 	updateInterval, err := time.ParseDuration(kp.userUpdateInterval())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse USER_UPDATE_INTERVAL: %w", err)
 	}
 
-	// get current time and calculate the threshold time
+	// Получение текущего времени и вычисление порогового времени
 	currentTime := time.Now().UTC()
 	thresholdTime := currentTime.Add(-updateInterval)
 
-	// Prepare the SQL query
+	// Подготовка SQL-запроса
 	sql := `
     SELECT
         passportSerie,
@@ -331,7 +377,7 @@ func (kp *BDKeeper) GetNonUpdateUsers() ([]models.ExtUserData, error) {
     FROM
         public.Users
     WHERE
-        last_checked_at <= $1
+        last_checked_at IS NULL OR last_checked_at <= $1
     LIMIT 100`
 
 	rows, err := kp.conn.QueryContext(ctx, sql, thresholdTime)
@@ -353,6 +399,7 @@ func (kp *BDKeeper) GetNonUpdateUsers() ([]models.ExtUserData, error) {
 			&user.Address,
 		)
 		if err != nil {
+
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
 
@@ -360,6 +407,7 @@ func (kp *BDKeeper) GetNonUpdateUsers() ([]models.ExtUserData, error) {
 	}
 
 	if err = rows.Err(); err != nil {
+
 		return nil, fmt.Errorf("failed to process rows: %w", err)
 	}
 
