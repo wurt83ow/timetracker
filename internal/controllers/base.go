@@ -57,21 +57,21 @@ type Authz interface {
 }
 
 type BaseController struct {
-	ctx     context.Context
-	storage Storage
-	options Options
-	log     Log
-	authz   Authz
+	ctx            context.Context
+	storage        Storage
+	defaultEndTime func() string
+	log            Log
+	authz          Authz
 }
 
 // NewBaseController creates a new BaseController instance
-func NewBaseController(ctx context.Context, storage Storage, options Options, log Log, authz Authz) *BaseController {
+func NewBaseController(ctx context.Context, storage Storage, defaultEndTime func() string, log Log, authz Authz) *BaseController {
 	instance := &BaseController{
-		ctx:     ctx,
-		storage: storage,
-		options: options,
-		log:     log,
-		authz:   authz,
+		ctx:            ctx,
+		storage:        storage,
+		defaultEndTime: defaultEndTime,
+		log:            log,
+		authz:          authz,
 	}
 
 	return instance
@@ -152,23 +152,42 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fill the timezone field with a default value if it was not passed
+	loc, err := time.LoadLocation("Local")
+	if err != nil {
+		h.log.Info("cannot load local timezone: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError) // code 500
+		return
+	}
+
+	Timezone := loc.String()
+
 	Hash := h.authz.GetHash(regReq.PassportNumber, regReq.Password)
+
+	// Convert default end time string to time.Time in the local timezone
+	defaultEndTime, err := h.parseDefaultEndTime(loc)
+	if err != nil {
+		h.log.Info("cannot parse default end time: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError) // code 500
+		return
+	}
 
 	userData := models.User{
 		PassportSerie:  passportSerie,
 		PassportNumber: passportNumber,
-		DefaultEndTime: time.Now(),
-		LastCheckedAt:  time.Now(),
+		DefaultEndTime: defaultEndTime,
+		LastCheckedAt:  time.Time{},
 		Hash:           Hash,
+		Timezone:       Timezone,
 	}
 
 	err = h.storage.InsertUser(h.ctx, userData)
 	if err != nil {
 		if err == storage.ErrConflict {
 			h.log.Info("login is already taken: ", zap.Error(err))
-			w.WriteHeader(http.StatusConflict) //code 409
+			w.WriteHeader(http.StatusConflict) // code 409
 		} else {
-			h.log.Info("error insert user to storage: ", zap.Error(err))
+			h.log.Info("error inserting user to storage: ", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError) // code 500
 		}
 		return
@@ -268,11 +287,28 @@ func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fill the timezone field with a default value if it was not passed
+	loc, err := time.LoadLocation("Local")
+	if err != nil {
+		h.log.Info("cannot load local timezone: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Convert default end time string to time.Time in the local timezone
+	defaultEndTime, err := h.parseDefaultEndTime(loc)
+	if err != nil {
+		h.log.Info("cannot parse default end time: ", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError) // code 500
+		return
+	}
+
 	user := models.User{
 		PassportSerie:  passportSerie,
 		PassportNumber: passportNumber,
-		DefaultEndTime: time.Now(),
-		LastCheckedAt:  time.Now(),
+		DefaultEndTime: defaultEndTime,
+		LastCheckedAt:  time.Time{},
+		Timezone:       loc.String(),
 	}
 
 	if err := h.storage.InsertUser(h.ctx, user); err != nil {
@@ -899,4 +935,21 @@ func (h *BaseController) parsePassportData(passportNumber string) (int, int, err
 	}
 
 	return passportSerie, passportNumberInt, nil
+}
+
+func (h *BaseController) parseDefaultEndTime(loc *time.Location) (time.Time, error) {
+	defaultEndTimeStr := h.defaultEndTime()
+	defaultEndTime, err := time.ParseInLocation("15:04", defaultEndTimeStr, loc)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	// Convert to time.Time including timezone offset
+	defaultEndTime = time.Date(
+		time.Now().Year(), time.Now().Month(), time.Now().Day(),
+		defaultEndTime.Hour(), defaultEndTime.Minute(), defaultEndTime.Second(),
+		defaultEndTime.Nanosecond(), loc,
+	)
+
+	return defaultEndTime, nil
 }

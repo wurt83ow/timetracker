@@ -73,7 +73,7 @@ func (server *Server) Serve() {
 	authz := initializeAuthz(option, nLogger)
 
 	// create a new controller to process incoming requests
-	basecontr := initializeBaseController(server.ctx, memoryStorage, option, nLogger, authz)
+	basecontr := initializeBaseController(server.ctx, memoryStorage, option.DefaultEndTime, nLogger, authz)
 
 	// get a middleware for logging requests
 	reqLog := middleware.NewReqLog(nLogger)
@@ -130,10 +130,10 @@ func initializeStorage(ctx context.Context, keeper storage.Keeper, logger *logge
 }
 
 // initializeBaseController initializes a BaseController instance
-func initializeBaseController(ctx context.Context, storage *storage.MemoryStorage, option *config.Options,
+func initializeBaseController(ctx context.Context, storage *storage.MemoryStorage, DefaultEndTime func() string,
 	logger *logger.Logger, authz *authz.JWTAuthz,
 ) *controllers.BaseController {
-	return controllers.NewBaseController(ctx, storage, option, logger, authz)
+	return controllers.NewBaseController(ctx, storage, DefaultEndTime, logger, authz)
 }
 
 // initializeWorkerPool initializes a worker pool with the provided tasks and options
