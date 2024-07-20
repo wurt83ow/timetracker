@@ -100,8 +100,6 @@ func (server *Server) Serve() {
 	// Block execution until a signal is received
 	<-stopChan
 
-	// Perform graceful server shutdown
-	server.Shutdown()
 }
 
 // initializeKeeper initializes a BDKeeper instance
@@ -187,20 +185,20 @@ func startServer(router chi.Router, address string) *http.Server {
 }
 
 // Shutdown gracefully shuts down the server
-func (server *Server) Shutdown() {
-	log.Printf("server stopped")
-
-	const shutdownTimeout = 5 * time.Second
-	ctxShutDown, cancel := context.WithTimeout(server.ctx, shutdownTimeout)
-
+func (server *Server) Shutdown(timeout time.Duration) {
+	ctxShutDown, cancel := context.WithTimeout(server.ctx, timeout)
 	defer cancel()
+
+	log.Println("attempting to stop the server")
 
 	if server.srv != nil {
 		if err := server.srv.Shutdown(ctxShutDown); err != nil {
 			if !errors.Is(err, http.ErrServerClosed) {
-				log.Fatalf("server Shutdown Failed:%s", err)
+				log.Printf("server Shutdown Failed: %s", err)
+				return
 			}
 		}
+		log.Println("server stopped")
 	}
 
 	log.Println("server exited properly")

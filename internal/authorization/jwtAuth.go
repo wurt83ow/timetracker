@@ -56,6 +56,7 @@ func (j *JWTAuthz) JWTAuthzMiddleware(log Log) func(next http.Handler) http.Hand
 			var userID string
 			if err == nil {
 				userID, err = j.DecodeJWTToUser(jwtCookie.Value)
+
 				if err != nil {
 					userID = ""
 					log.Info("Error occurred creating a cookie", zap.Error(err))

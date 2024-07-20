@@ -6,12 +6,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/wurt83ow/timetracker/internal/app"
 )
 
 func main() {
-
+	const shutdownTimeout = 5 * time.Second
 	// Create a root context with the possibility of cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -26,8 +27,8 @@ func main() {
 		sig := <-signalCh
 		log.Printf("Received signal: %+v", sig)
 
-		// Shutdown the server
-		server.Shutdown()
+		// Perform graceful server shutdown
+		server.Shutdown(shutdownTimeout)
 
 		// Cancel the context
 		cancel()
