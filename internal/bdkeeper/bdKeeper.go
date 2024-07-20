@@ -316,7 +316,7 @@ func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error)
 		var m models.User
 		var defaultEndTime pq.NullTime
 		var lastCheckedAt pq.NullTime
-		var hashHex string
+		var hashHex *string
 
 		err := rows.Scan(
 			&m.UUID,
@@ -335,10 +335,12 @@ func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error)
 			return nil, fmt.Errorf("failed to load users: %w", err)
 		}
 
-		// Декодирование хэша из шестнадцатеричной строки в байты
-		m.Hash, err = hex.DecodeString(hashHex)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode password hash: %w", err)
+		// Декодирование хэша из шестнадцатеричной строки в байты, если значение не NULL
+		if hashHex != nil {
+			m.Hash, err = hex.DecodeString(*hashHex)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode password hash: %w", err)
+			}
 		}
 
 		// Set DefaultEndTime field only if the value from the database is not NULL
@@ -435,29 +437,30 @@ func (kp *BDKeeper) GetNonUpdateUsers(ctx context.Context) ([]models.ExtUserData
 	return users, nil
 }
 
-func (bd *BDKeeper) SaveTask(ctx context.Context, task models.Task) error {
+func (bd *BDKeeper) SaveTask(ctx context.Context, task models.Task) (int, error) {
 	query := `
         INSERT INTO tasks (
             name, description, created_at
         ) VALUES (
             $1, $2, $3
-        )
+        ) RETURNING id
     `
 
-	_, err := bd.pool.Exec(
+	var taskID int
+	err := bd.pool.QueryRow(
 		ctx,
 		query,
 		task.Name,
 		task.Description,
 		task.CreatedAt,
-	)
+	).Scan(&taskID)
 	if err != nil {
 		bd.log.Info("error saving task to database: ", zap.Error(err))
-		return err
+		return 0, err
 	}
 
-	bd.log.Info("Task saved successfully: ", zap.String("name", task.Name))
-	return nil
+	bd.log.Info("Task saved successfully: ", zap.String("name", task.Name), zap.Int("id", taskID))
+	return taskID, nil
 }
 
 func (kp *BDKeeper) LoadTasks(ctx context.Context) (storage.StorageTasks, error) {
@@ -517,6 +520,31 @@ func (kp *BDKeeper) DeleteTask(ctx context.Context, id int) error {
 	}
 
 	kp.log.Info("Task deleted successfully", zap.Int("id", id))
+	return nil
+}
+
+// UpdateTask updates an existing task in the database
+func (bd *BDKeeper) UpdateTask(ctx context.Context, task models.Task) error {
+
+	query := `
+        UPDATE Tasks SET
+            name = $2,
+            description = $3              
+        WHERE id = $1
+    `
+	_, err := bd.pool.Exec(
+		ctx,
+		query,
+		task.ID,
+		task.Name,
+		task.Description,
+	)
+	if err != nil {
+		bd.log.Info("Error updating task in the database: ", zap.Error(err))
+		return err
+	}
+
+	bd.log.Info("Task successfully updated: ", zap.Int("id", task.ID))
 	return nil
 }
 

@@ -92,3 +92,7 @@ type RequestDataTask struct {
 	StartDate      string `json:"startDate"`
 	EndDate        string `json:"endDate"`
 }
+
+type RequestTask struct {
+	ID string `json:"id"`
+}

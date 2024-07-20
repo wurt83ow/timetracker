@@ -48,7 +48,8 @@ type Keeper interface {
 	GetNonUpdateUsers(context.Context) ([]models.ExtUserData, error)
 
 	LoadTasks(context.Context) (StorageTasks, error)
-	SaveTask(context.Context, models.Task) error
+	SaveTask(context.Context, models.Task) (int, error)
+	UpdateTask(context.Context, models.Task) error
 	DeleteTask(context.Context, int) error
 	StartTaskTracking(context.Context, models.TimeEntry) error
 	StopTaskTracking(context.Context, models.TimeEntry) error
@@ -71,7 +72,7 @@ func NewMemoryStorage(ctx context.Context, keeper Keeper, log Log) *MemoryStorag
 		if err != nil {
 			log.Info("cannot load user data: ", zap.Error(err))
 		}
-
+		fmt.Println("33333333333333333333333333333333333333333333333333333", users, err)
 		// Load tasks
 		tasks, err = keeper.LoadTasks(ctx)
 		if err != nil {
@@ -240,12 +241,16 @@ func (s *MemoryStorage) InsertTask(ctx context.Context, task models.Task) error 
 		return ErrConflict
 	}
 
-	// Save the task to the keeper
-	if err := s.keeper.SaveTask(ctx, task); err != nil {
+	// Save the task to the keeper and get the generated ID
+	taskID, err := s.keeper.SaveTask(ctx, task)
+	if err != nil {
 		return err
 	}
 
-	// Also save to the in-memory map
+	// Update the task ID with the generated ID
+	task.ID = taskID
+
+	// Save to the in-memory map with the new ID
 	s.tasks[task.ID] = task
 
 	return nil
@@ -253,13 +258,24 @@ func (s *MemoryStorage) InsertTask(ctx context.Context, task models.Task) error 
 
 // UpdateTask updates an existing task in the storage
 func (s *MemoryStorage) UpdateTask(ctx context.Context, task models.Task) error {
+	// Предполагается, что метод UpdateTask у s.keeper обновляет задачу в хранилище
+	err := s.keeper.UpdateTask(ctx, task)
+	if err != nil {
+		return err
+	}
+
 	s.omx.Lock()
 	defer s.omx.Unlock()
 
-	if _, exists := s.tasks[task.ID]; !exists {
+	if o, exists := s.tasks[task.ID]; exists {
+		o.Name = task.Name
+		o.Description = task.Description
+		o.CreatedAt = task.CreatedAt
+		s.tasks[task.ID] = o
+	} else {
 		return ErrNotFound
 	}
-	s.tasks[task.ID] = task
+
 	return nil
 }
 
