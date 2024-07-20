@@ -35,11 +35,6 @@ func NewServer(ctx context.Context) *Server {
 	return server
 }
 
-// !!! ApiSystemAddress returns the API system address
-func ApiSystemAddress() string {
-	return "localhost:8081"
-}
-
 // Serve starts the server and handles signal interruption for graceful shutdown
 func (server *Server) Serve() {
 	// create and initialize a new option instance
@@ -82,7 +77,7 @@ func (server *Server) Serve() {
 	go pool.RunBackground()
 
 	// create a new controller for creating outgoing requests
-	extcontr := initializeExtController(server.ctx, memoryStorage, nLogger)
+	extcontr := initializeExtController(server.ctx, memoryStorage, option, nLogger)
 
 	apiService := initializeApiService(server.ctx, extcontr, pool, memoryStorage, nLogger, option)
 	apiService.Start()
@@ -147,8 +142,8 @@ func initializeAuthz(option *config.Options, logger *logger.Logger) *authz.JWTAu
 }
 
 // initializeExtController initializes an ExtController instance
-func initializeExtController(ctx context.Context, storage *storage.MemoryStorage, logger *logger.Logger) *controllers.ExtController {
-	return controllers.NewExtController(ctx, storage, ApiSystemAddress, logger)
+func initializeExtController(ctx context.Context, storage *storage.MemoryStorage, option *config.Options, logger *logger.Logger) *controllers.ExtController {
+	return controllers.NewExtController(ctx, storage, option.ApiSystemAddress, logger)
 }
 
 // initializeApiService initializes an ApiService instance

@@ -710,11 +710,10 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 	startOfDay := time.Now().In(loc).Truncate(24 * time.Hour)
 
 	entry := models.TimeEntry{
-		EventDate:      startOfDay,
-		UserID:         user.UUID,
-		TaskID:         reqData.TaskID,
-		UserTimezone:   user.Timezone,
-		DefaultEndTime: user.DefaultEndTime,
+		EventDate:    startOfDay,
+		UserID:       user.UUID,
+		TaskID:       reqData.TaskID,
+		UserTimezone: user.Timezone,
 	}
 
 	// Start task tracking
@@ -795,11 +794,10 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 	startOfDay := time.Now().In(loc).Truncate(24 * time.Hour)
 
 	entry := models.TimeEntry{
-		EventDate:      startOfDay,
-		UserID:         user.UUID,
-		TaskID:         reqData.TaskID,
-		UserTimezone:   user.Timezone,
-		DefaultEndTime: user.DefaultEndTime,
+		EventDate:    startOfDay,
+		UserID:       user.UUID,
+		TaskID:       reqData.TaskID,
+		UserTimezone: user.Timezone,
 	}
 
 	// Stop task tracking

@@ -12,7 +12,7 @@ import (
 type Options struct {
 	flagRunAddr, flagLogLevel, flagDataBaseDSN,
 	flagJWTSigningKey, flagConcurrency, flagTaskExecutionInterval,
-	flagUserUpdateInterval, flagDefaultEndTime string
+	flagUserUpdateInterval, flagDefaultEndTime, flagApiSystemAddress string
 }
 
 func NewOptions() *Options {
@@ -34,6 +34,7 @@ func (o *Options) ParseFlags() {
 	regStringVar(&o.flagLogLevel, "l", getEnvOrDefault("LOG_LEVEL", "debug"), "log level")
 	regStringVar(&o.flagUserUpdateInterval, "u", getEnvOrDefault("USER_UPDATE_INTERVAL", "5m"), "user update interval")
 	regStringVar(&o.flagDefaultEndTime, "e", getEnvOrDefault("DEFAULT_END_TIME", "19:00"), "default end time")
+	regStringVar(&o.flagApiSystemAddress, "s", getEnvOrDefault("API_SYSTEM_ADDRESS", "localhost:8081"), "API system address")
 
 	// parse the arguments passed to the server into registered variables
 	flag.Parse()
@@ -69,6 +70,10 @@ func (o *Options) UserUpdateInterval() string {
 
 func (o *Options) DefaultEndTime() string {
 	return o.flagDefaultEndTime
+}
+
+func (o *Options) ApiSystemAddress() string {
+	return o.flagApiSystemAddress
 }
 
 func regStringVar(p *string, name string, value string, usage string) {
