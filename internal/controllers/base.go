@@ -337,7 +337,9 @@ func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 // @Router /api/user [put]
 func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	var user models.User
+
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		fmt.Println("90999999999999999999999999999999999999999999999999", err)
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -370,7 +372,6 @@ func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 // @Router /api/user [delete]
 func (h *BaseController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
-	fmt.Println("dfssssssssssssssssssssssssssssssssssssssssssssssssssssssssss")
 	var reqData models.RequestUser
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))

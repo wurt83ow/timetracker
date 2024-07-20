@@ -248,20 +248,19 @@ func (bd *BDKeeper) UpdateUser(ctx context.Context, user models.User) error {
 
 	query := `
         UPDATE Users SET
-            surname = $4,
-            name = $5,
-            patronymic = $6,
-            address = $7,
-            default_end_time = $8,
-            timezone = $9,            
-            password_hash = $10,
-            last_checked_at = $11
-        WHERE passportSerie = $2 AND passportNumber = $3
+            surname = $3,
+            name = $4,
+            patronymic = $5,
+            address = $6,
+            default_end_time = $7,
+            timezone = $8,            
+            password_hash = $9,
+            last_checked_at = $10
+        WHERE passportSerie = $1 AND passportNumber = $2
     `
 	_, err := bd.pool.Exec(
 		ctx,
 		query,
-		user.UUID,
 		user.PassportSerie,
 		user.PassportNumber,
 		user.Surname,
