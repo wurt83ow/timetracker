@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -164,8 +163,7 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 	Timezone := loc.String()
 
 	Hash := h.authz.GetHash(regReq.PassportNumber, regReq.Password)
-	fmt.Println("44444444444444444444444444444444444444444444444444444", regReq.PassportNumber, regReq.Password)
-	fmt.Println("44444444444444444444444444444444444444444444444444444", Hash)
+
 	// Convert default end time string to time.Time in the local timezone
 	defaultEndTime, err := h.parseDefaultEndTime(loc)
 	if err != nil {
@@ -339,7 +337,6 @@ func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		fmt.Println("90999999999999999999999999999999999999999999999999", err)
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
