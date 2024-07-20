@@ -232,6 +232,7 @@ func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.storage.GetUser(h.ctx, passportSerie, passportNumber)
+
 	if err != nil {
 		// incorrect login/password pair
 		w.WriteHeader(http.StatusUnauthorized) //code 401

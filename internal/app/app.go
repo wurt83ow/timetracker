@@ -65,7 +65,7 @@ func (server *Server) Serve() {
 	pool := initializeWorkerPool(allTask, option, nLogger)
 
 	// create a new NewJWTAuthz for user authorization
-	authz := initializeAuthz(option, nLogger)
+	authz := initializeAuthz(memoryStorage, option, nLogger)
 
 	// create a new controller to process incoming requests
 	basecontr := initializeBaseController(server.ctx, memoryStorage, option.DefaultEndTime, nLogger, authz)
@@ -135,8 +135,8 @@ func initializeWorkerPool(allTask []*workerpool.Task, option *config.Options, lo
 }
 
 // initializeAuthz initializes a JWTAuthz instance for user authorization
-func initializeAuthz(option *config.Options, logger *logger.Logger) *authz.JWTAuthz {
-	return authz.NewJWTAuthz(option.JWTSigningKey(), logger)
+func initializeAuthz(storage *storage.MemoryStorage, option *config.Options, logger *logger.Logger) *authz.JWTAuthz {
+	return authz.NewJWTAuthz(storage, option.JWTSigningKey(), logger)
 }
 
 // initializeExtController initializes an ExtController instance

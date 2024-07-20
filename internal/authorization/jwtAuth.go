@@ -6,6 +6,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/wurt83ow/timetracker/internal/config"
@@ -23,19 +25,24 @@ type Log interface {
 	Info(string, ...zapcore.Field)
 }
 
+type Storage interface {
+	GetUser(context.Context, int, int) (models.User, error)
+}
+
 type JWTAuthz struct {
 	jwtSigningKey    []byte
 	log              Log
 	jwtSigningMethod *jwt.SigningMethodHMAC
 	defaultCookie    http.Cookie
+	storage          Storage
 }
 
-func NewJWTAuthz(signingKey string, log Log) *JWTAuthz {
+func NewJWTAuthz(storage Storage, signingKey string, log Log) *JWTAuthz {
 	return &JWTAuthz{
 		jwtSigningKey:    []byte(config.GetAsString("JWT_SIGNING_KEY", signingKey)),
 		log:              log,
 		jwtSigningMethod: jwt.SigningMethodHS256,
-
+		storage:          storage,
 		defaultCookie: http.Cookie{
 			HttpOnly: true,
 			// SameSite: http.SameSiteLaxMode,
@@ -54,15 +61,15 @@ func (j *JWTAuthz) JWTAuthzMiddleware(log Log) func(next http.Handler) http.Hand
 			jwtCookie, err := r.Cookie("jwt-token")
 
 			var userID string
-			if err == nil {
+			if err == nil && jwtCookie.Value != "" {
 				userID, err = j.DecodeJWTToUser(jwtCookie.Value)
 
 				if err != nil {
 					userID = ""
-					log.Info("Error occurred creating a cookie", zap.Error(err))
+					log.Info("Error occurred decoding JWT from cookie", zap.Error(err))
 				}
 			} else {
-				log.Info("Error occurred reading cookie", zap.Error(err))
+				log.Info("Error occurred reading JWT cookie", zap.Error(err))
 			}
 
 			if userID == "" {
@@ -78,6 +85,21 @@ func (j *JWTAuthz) JWTAuthzMiddleware(log Log) func(next http.Handler) http.Hand
 			}
 
 			if userID == "" {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			// Check if user exists in the database
+			passportSerie, passportNumber, err := j.parsePassportData(userID)
+			if err != nil {
+				log.Info("Error occurred parsing passport data", zap.Error(err))
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			_, err = j.storage.GetUser(r.Context(), passportSerie, passportNumber)
+			if err != nil {
+				log.Info("User not found in database", zap.Error(err))
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -110,6 +132,10 @@ func (j *JWTAuthz) CreateJWTTokenForUser(userid string) string {
 }
 
 func (j *JWTAuthz) DecodeJWTToUser(token string) (string, error) {
+	if token == "" {
+		return "", errors.New("empty token")
+	}
+
 	// Decode
 	decodedToken, err := jwt.ParseWithClaims(token, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if !(j.jwtSigningMethod == token.Method) {
@@ -148,4 +174,24 @@ func (j *JWTAuthz) AuthCookie(name string, token string) *http.Cookie {
 	d.Path = "/"
 
 	return &d
+}
+
+// parsePassportData parses the passport data from a string into series and number
+func (j *JWTAuthz) parsePassportData(passportNumber string) (int, int, error) {
+	parts := strings.Split(passportNumber, " ")
+	if len(parts) != 2 {
+		return 0, 0, errors.New("invalid passport number format")
+	}
+
+	passportSerie, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, errors.New("invalid passport series format")
+	}
+
+	passportNumberInt, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, errors.New("invalid passport number format")
+	}
+
+	return passportSerie, passportNumberInt, nil
 }
