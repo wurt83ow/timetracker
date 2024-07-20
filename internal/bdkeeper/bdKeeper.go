@@ -283,7 +283,6 @@ func (bd *BDKeeper) UpdateUser(ctx context.Context, user models.User) error {
 }
 
 func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error) {
-
 	// get users from db
 	sql := `
     SELECT
@@ -318,6 +317,7 @@ func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error)
 		var m models.User
 		var defaultEndTime pq.NullTime
 		var lastCheckedAt pq.NullTime
+		var hashHex string
 
 		err := rows.Scan(
 			&m.UUID,
@@ -329,11 +329,17 @@ func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error)
 			&m.Address,
 			&defaultEndTime,
 			&m.Timezone,
-			&m.Hash,
+			&hashHex,
 			&lastCheckedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load users: %w", err)
+		}
+
+		// Декодирование хэша из шестнадцатеричной строки в байты
+		m.Hash, err = hex.DecodeString(hashHex)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode password hash: %w", err)
 		}
 
 		// Set DefaultEndTime field only if the value from the database is not NULL

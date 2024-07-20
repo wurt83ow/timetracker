@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -163,7 +164,8 @@ func (h *BaseController) Register(w http.ResponseWriter, r *http.Request) {
 	Timezone := loc.String()
 
 	Hash := h.authz.GetHash(regReq.PassportNumber, regReq.Password)
-
+	fmt.Println("44444444444444444444444444444444444444444444444444444", regReq.PassportNumber, regReq.Password)
+	fmt.Println("44444444444444444444444444444444444444444444444444444", Hash)
 	// Convert default end time string to time.Time in the local timezone
 	defaultEndTime, err := h.parseDefaultEndTime(loc)
 	if err != nil {
@@ -360,27 +362,25 @@ func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 // @Tags User
 // @Accept json
 // @Produce json
-// @Param passportSerie query int true "Passport Series"
-// @Param passportNumber query int true "Passport Number"
+// @Param user body models.RequestUser true "User Info"
 // @Success 200 {string} string "User deleted successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 404 {string} string "Not Found"
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/user [delete]
 func (h *BaseController) DeleteUser(w http.ResponseWriter, r *http.Request) {
-	passportSerieStr := r.URL.Query().Get("passportSerie")
-	passportNumberStr := r.URL.Query().Get("passportNumber")
 
-	passportSerie, err := strconv.Atoi(passportSerieStr)
-	if err != nil {
-		h.log.Info("invalid passport series format")
+	fmt.Println("dfssssssssssssssssssssssssssssssssssssssssssssssssssssssssss")
+	var reqData models.RequestUser
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	passportNumber, err := strconv.Atoi(passportNumberStr)
+	passportSerie, passportNumber, err := h.parsePassportData(reqData.PassportNumber)
 	if err != nil {
-		h.log.Info("invalid passport number format")
+		h.log.Info(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
