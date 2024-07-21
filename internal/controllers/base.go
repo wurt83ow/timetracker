@@ -771,7 +771,6 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/task/stop [post]
 func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request) {
-
 	var reqData models.RequestData
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
@@ -779,29 +778,22 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Split passport series and number
-	parts := strings.Split(reqData.PassportNumber, " ")
-	if len(parts) != 2 {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
+	// Retrieve userID from context
+	userID, ok := r.Context().Value(models.Key("userID")).(string)
+	if !ok || userID == "" {
+		h.log.Info("userID not found in context")
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
-	passportSerie, err := strconv.Atoi(parts[0])
+	// Find user by userID (passport series and number) in cache
+	passportSerie, passportNumber, err := h.parsePassportData(userID)
 	if err != nil {
-		h.log.Info("invalid passport series format")
+		h.log.Info("error parsing passport data", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	passportNumber, err := strconv.Atoi(parts[1])
-	if err != nil {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Find user by passport series and number in cache
 	filter := models.Filter{
 		PassportSerie:  &passportSerie,
 		PassportNumber: &passportNumber,
@@ -840,6 +832,9 @@ func (h *BaseController) StopTaskTracking(w http.ResponseWriter, r *http.Request
 	}
 
 	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte("Task tracking stopped successfully")); err != nil {
+		h.log.Info("error writing response: ", zap.Error(err))
+	}
 	h.log.Info("Task tracking stopped successfully")
 }
 
