@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -857,7 +858,7 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
+	fmt.Println("88888888888888888888888888888888888888888888888888888888888888888")
 	// Split passport series and number
 	parts := strings.Split(reqData.PassportNumber, " ")
 	if len(parts) != 2 {
@@ -885,6 +886,7 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 		PassportSerie:  &passportSerie,
 		PassportNumber: &passportNumber,
 	}
+
 	users, err := h.storage.GetUsers(h.ctx, filter, models.Pagination{Limit: 1})
 	if err != nil || len(users) == 0 {
 		h.log.Info("user not found", zap.Error(err))
