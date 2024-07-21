@@ -138,7 +138,7 @@ paths:
       summary: Add task
       tags:
       - Tasks
-    put:
+    patch:
       consumes:
       - application/json
       description: Update a task in the database
@@ -380,7 +380,7 @@ paths:
       summary: Add user
       tags:
       - User
-    put:
+    patch:
       consumes:
       - application/json
       description: Update a user in the database

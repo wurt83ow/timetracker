@@ -37,8 +37,8 @@ func (m *MockStorage) UpdateUser(ctx context.Context, user models.User) error {
 	return args.Error(0)
 }
 
-func (m *MockStorage) DeleteUser(ctx context.Context, passportSerie int, passportNumber int) error {
-	args := m.Called(ctx, passportSerie, passportNumber)
+func (m *MockStorage) DeleteUser(ctx context.Context, id int) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -84,6 +84,12 @@ func (m *MockStorage) GetUserTaskSummary(ctx context.Context, userID int, startD
 
 func (m *MockStorage) GetUser(ctx context.Context, passportSerie int, passportNumber int) (models.User, error) {
 	args := m.Called(ctx, passportSerie, passportNumber)
+	return args.Get(0).(models.User), args.Error(1)
+}
+
+// GetUserByID retrieves a user from the mock storage by ID
+func (m *MockStorage) GetUserByID(ctx context.Context, id int) (models.User, error) {
+	args := m.Called(ctx, id)
 	return args.Get(0).(models.User), args.Error(1)
 }
 

@@ -9,7 +9,7 @@
 		{
 			"name": "Update task",
 			"request": {
-				"method": "PUT",
+				"method": "PATCH",
 				"header": [],
 				"body": {
 					"mode": "raw",
@@ -203,7 +203,7 @@
 		{
 			"name": "Update user",
 			"request": {
-				"method": "PUT",
+				"method": "PATCH",
 				"header": [],
 				"body": {
 					"mode": "raw",

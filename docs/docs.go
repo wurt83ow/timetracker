@@ -16,7 +16,7 @@ const docTemplate = `{
     "basePath": "{{.BasePath}}",
     "paths": {
         "/api/task": {
-            "put": {
+            "patch": {
                 "description": "Update a task in the database",
                 "consumes": [
                     "application/json"
@@ -385,7 +385,7 @@ const docTemplate = `{
             }
         },
         "/api/user": {
-            "put": {
+            "patch": {
                 "description": "Update a user in the database",
                 "consumes": [
                     "application/json"

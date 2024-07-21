@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,7 +26,7 @@ type Storage interface {
 	GetBaseConnection(context.Context) bool
 	InsertUser(context.Context, models.User) error
 	UpdateUser(context.Context, models.User) error
-	DeleteUser(context.Context, int, int) error
+	DeleteUser(context.Context, int) error
 	GetUsers(context.Context, models.Filter, models.Pagination) ([]models.User, error)
 
 	InsertTask(context.Context, models.Task) error
@@ -39,6 +38,7 @@ type Storage interface {
 	StopTaskTracking(context.Context, models.TimeEntry) error
 	GetUserTaskSummary(context.Context, int, time.Time, time.Time, string, time.Time) ([]models.TaskSummary, error)
 	GetUser(context.Context, int, int) (models.User, error)
+	GetUserByID(context.Context, int) (models.User, error)
 }
 
 type Options interface {
@@ -92,14 +92,14 @@ func (h *BaseController) Route() *chi.Mux {
 
 		// Operations with users
 		r.Post("/api/user", h.AddUser)
-		r.Put("/api/user", h.UpdateUser)
-		r.Delete("/api/user", h.DeleteUser)
+		r.Patch("/api/user/{id}", h.UpdateUser)
+		r.Delete("/api/user/{id}", h.DeleteUser)
 		r.Get("/api/users", h.GetUsers)
 
 		// Operations with tasks
 		r.Post("/api/task", h.AddTask)
-		r.Put("/api/task", h.UpdateTask)
-		r.Delete("/api/task", h.DeleteTask)
+		r.Patch("/api/task/{id}", h.UpdateTask)
+		r.Delete("/api/task/{id}", h.DeleteTask)
 		r.Get("/api/tasks", h.GetTasks)
 
 		// Operations with tracker
@@ -339,17 +339,27 @@ func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Update user
-// @Description Update a user in the database
+// @Description Update a user in the database by ID
 // @Tags User
 // @Accept json
 // @Produce json
+// @Param id path int true "User ID"
 // @Param user body models.User true "User Info"
 // @Success 200 {string} string "User updated successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 404 {string} string "Not Found"
 // @Failure 500 {string} string "Internal Server Error"
-// @Router /api/user [put]
+// @Router /api/user/{id} [patch]
 func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	// Extracting the user ID from the URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		h.log.Info("invalid user ID in URL")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	var user models.User
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -357,6 +367,9 @@ func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	// Assigning the extracted ID to the user struct
+	user.UUID = id
 
 	if err := h.storage.UpdateUser(h.ctx, user); err == storage.ErrNotFound {
 		h.log.Info("user not found")
@@ -373,33 +386,27 @@ func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Delete user
-// @Description Delete a user from the database
+// @Description Delete a user from the database by ID
 // @Tags User
 // @Accept json
 // @Produce json
-// @Param user body models.RequestUser true "User Info"
+// @Param id path int true "User ID"
 // @Success 200 {string} string "User deleted successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 404 {string} string "Not Found"
 // @Failure 500 {string} string "Internal Server Error"
-// @Router /api/user [delete]
+// @Router /api/user/{id} [delete]
 func (h *BaseController) DeleteUser(w http.ResponseWriter, r *http.Request) {
-
-	var reqData models.RequestUser
-	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	passportSerie, passportNumber, err := h.parsePassportData(reqData.PassportNumber)
+	// Extracting the user ID from the URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		h.log.Info(err.Error())
+		h.log.Info("invalid user ID in URL")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	err = h.storage.DeleteUser(h.ctx, passportSerie, passportNumber)
+	err = h.storage.DeleteUser(h.ctx, id)
 	if err == storage.ErrNotFound {
 		h.log.Info("user not found")
 		w.WriteHeader(http.StatusNotFound)
@@ -547,34 +554,45 @@ func (h *BaseController) AddTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Update task
-// @Description Update a task in the database
+// @Description Update a task in the database by ID
 // @Tags Tasks
 // @Accept json
 // @Produce json
+// @Param id path int true "Task ID"
 // @Param task body models.Task true "Task Info"
 // @Success 200 {string} string "Task updated successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 404 {string} string "Not Found"
 // @Failure 500 {string} string "Internal Server Error"
-// @Router /api/task [put]
+// @Router /api/task/{id} [patch]
 func (h *BaseController) UpdateTask(w http.ResponseWriter, r *http.Request) {
-	var task models.Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+	// Extracting the task ID from the URL
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		h.log.Info("invalid task ID in URL")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
+	var task models.Task
+
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
+	// Assigning the extracted ID to the task struct
+	task.ID = id
+
 	if err := h.storage.UpdateTask(h.ctx, task); err == storage.ErrNotFound {
 		h.log.Info("task not found")
 		w.WriteHeader(http.StatusNotFound)
-
 		return
 	} else if err != nil {
 		h.log.Info("error updating task in storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
-
 		return
 	}
 
@@ -858,43 +876,21 @@ func (h *BaseController) GetUserTaskSummary(w http.ResponseWriter, r *http.Reque
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	fmt.Println("88888888888888888888888888888888888888888888888888888888888888888")
-	// Split passport series and number
-	parts := strings.Split(reqData.PassportNumber, " ")
-	if len(parts) != 2 {
-		h.log.Info("invalid passport number format")
+
+	// Check for valid ID
+	if reqData.ID == 0 {
+		h.log.Info("invalid user ID")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	passportSerie, err := strconv.Atoi(parts[0])
+	// Find user by ID
+	user, err := h.storage.GetUserByID(h.ctx, reqData.ID)
 	if err != nil {
-		h.log.Info("invalid passport series format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	passportNumber, err := strconv.Atoi(parts[1])
-	if err != nil {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Find user by passport series and number in cache
-	filter := models.Filter{
-		PassportSerie:  &passportSerie,
-		PassportNumber: &passportNumber,
-	}
-
-	users, err := h.storage.GetUsers(h.ctx, filter, models.Pagination{Limit: 1})
-	if err != nil || len(users) == 0 {
 		h.log.Info("user not found", zap.Error(err))
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-
-	user := users[0]
 
 	// Parse start and end dates
 	startDate, err := time.Parse(time.RFC3339, reqData.StartDate)

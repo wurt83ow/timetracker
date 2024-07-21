@@ -129,13 +129,13 @@ psql postgres://timetracker:example@localhost:5432/timetracker?sslmode=disable -
 - **POST /api/task/start**: Начать отсчет времени по задаче.
 - **POST /api/task/stop**: Закончить отсчет времени по задаче.
 - **DELETE /api/user**: Удаление пользователя.
-- **PUT /api/user**: Изменение данных пользователя.
+- **PATCH /api/user**: Обновление данных пользователя.
 - **POST /api/user**: Добавление нового пользователя.
 - **POST /api/user/register**: Регистрация нового пользователя.
 - **POST /api/user/login**: Авторизация пользователя.
 - **GET /ping**: Проверка состояния сервиса.
 - **POST /api/task**: Добавление новой задачи.
-- **PUT /api/task**: Изменение данных задачи.
+- **PATCH /api/task**: Обновление данных задачи.
 - **DELETE /api/task**: Удаление задачи.
 - **GET /api/tasks**: Получение списка задач с фильтрацией и пагинацией.
 

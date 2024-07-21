@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +20,7 @@ var (
 )
 
 type (
-	StorageUsers = map[string]models.User
+	StorageUsers = map[int]models.User
 	StorageTasks = map[int]models.Task
 )
 
@@ -41,10 +40,10 @@ type MemoryStorage struct {
 
 type Keeper interface {
 	LoadUsers(context.Context) (StorageUsers, error)
-	SaveUser(context.Context, string, models.User) error
+	SaveUser(context.Context, models.User) (int, error)
 	UpdateUser(context.Context, models.User) error
 	UpdateUsersInfo(context.Context, []models.ExtUserData) error
-	DeleteUser(context.Context, int, int) error
+	DeleteUser(context.Context, int) error
 	GetNonUpdateUsers(context.Context) ([]models.ExtUserData, error)
 
 	LoadTasks(context.Context) (StorageTasks, error)
@@ -54,6 +53,7 @@ type Keeper interface {
 	StartTaskTracking(context.Context, models.TimeEntry) error
 	StopTaskTracking(context.Context, models.TimeEntry) error
 	GetUserTaskSummary(context.Context, int, time.Time, time.Time, string, time.Time) ([]models.TaskSummary, error)
+	GetUser(context.Context, int, int) (*models.User, error)
 
 	Ping(context.Context) bool
 	Close() bool
@@ -100,12 +100,25 @@ func (s *MemoryStorage) UpdateUsersInfo(ctx context.Context, result []models.Ext
 	defer s.umx.Unlock()
 
 	for _, v := range result {
-		key := fmt.Sprintf("%d %d", v.PassportSerie, v.PassportNumber)
-		if o, exists := s.users[key]; exists {
-			o.Surname = v.Surname
-			o.Name = v.Name
-			o.Address = v.Address
-			s.users[key] = o
+		var id int
+		var exists bool
+
+		// Attempt to find the user in the in-memory storage
+		for _, user := range s.users {
+			if user.PassportSerie == v.PassportSerie && user.PassportNumber == v.PassportNumber {
+				id = user.UUID
+				exists = true
+				break
+			}
+		}
+
+		if exists {
+			// Extract the user, modify necessary fields, and put back into the map
+			user := s.users[id]
+			user.Surname = v.Surname
+			user.Name = v.Name
+			user.Address = v.Address
+			s.users[id] = user
 		}
 	}
 
@@ -114,20 +127,18 @@ func (s *MemoryStorage) UpdateUsersInfo(ctx context.Context, result []models.Ext
 
 // InsertUser inserts a new user into the storage
 func (s *MemoryStorage) InsertUser(ctx context.Context, user models.User) error {
-	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
+
 	s.umx.Lock()
 	defer s.umx.Unlock()
-	if _, exists := s.users[key]; exists {
-		return ErrConflict
-	}
 
 	// Save the user to the keeper
-	if err := s.keeper.SaveUser(ctx, key, user); err != nil {
+	id, err := s.keeper.SaveUser(ctx, user)
+	if err != nil {
 		return err
 	}
 
 	// Also save to the in-memory map
-	s.users[key] = user
+	s.users[id] = user
 
 	return nil
 }
@@ -135,22 +146,22 @@ func (s *MemoryStorage) InsertUser(ctx context.Context, user models.User) error 
 // UpdateUser updates an existing user in the storage
 func (s *MemoryStorage) UpdateUser(ctx context.Context, user models.User) error {
 	// Form the key to search for the user in the storage by passport series and number
-	key := fmt.Sprintf("%d %d", user.PassportSerie, user.PassportNumber)
+
 	s.umx.Lock()
 	defer s.umx.Unlock()
 
 	// Check if the user with such a key exists in the storage
-	if _, exists := s.users[key]; !exists {
+	if _, exists := s.users[user.UUID]; !exists {
 		return ErrNotFound
 	}
-
-	// Update the user in memory
-	s.users[key] = user
 
 	// Attempt to update the user through the keeper
 	if err := s.keeper.UpdateUser(ctx, user); err != nil {
 		return err
 	}
+
+	// Update the user in memory
+	s.users[user.UUID] = user
 
 	return nil
 }
@@ -202,22 +213,22 @@ func (s *MemoryStorage) GetUsers(ctx context.Context, filter models.Filter, pagi
 }
 
 // DeleteUser deletes a user from the storage
-func (s *MemoryStorage) DeleteUser(ctx context.Context, passportSerie, passportNumber int) error {
-	key := fmt.Sprintf("%d %d", passportSerie, passportNumber)
+func (s *MemoryStorage) DeleteUser(ctx context.Context, id int) error {
+
 	s.umx.Lock()
 	defer s.umx.Unlock()
 
-	if _, exists := s.users[key]; !exists {
+	if _, exists := s.users[id]; !exists {
 		return ErrNotFound
 	}
 
 	// Delete the user from the keeper
-	if err := s.keeper.DeleteUser(ctx, passportSerie, passportNumber); err != nil {
+	if err := s.keeper.DeleteUser(ctx, id); err != nil {
 		return err
 	}
 
 	// Also delete from the in-memory map
-	delete(s.users, key)
+	delete(s.users, id)
 
 	return nil
 }
@@ -365,8 +376,30 @@ func (s *MemoryStorage) GetUser(ctx context.Context, passportSerie, passportNumb
 	s.umx.RLock()
 	defer s.umx.RUnlock()
 
-	key := fmt.Sprintf("%d %d", passportSerie, passportNumber)
-	v, exists := s.users[key]
+	// Попытка найти пользователя в in-memory хранилище
+	for _, user := range s.users {
+		if user.PassportSerie == passportSerie && user.PassportNumber == passportNumber {
+			return user, nil
+		}
+	}
+
+	// Если пользователь не найден в in-memory хранилище, поиск в базе данных
+	user, err := s.keeper.GetUser(ctx, passportSerie, passportNumber)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	s.users[user.UUID] = *user
+
+	return *user, nil
+}
+
+// GetUser retrieves a user from the storage by passport series and number
+func (s *MemoryStorage) GetUserByID(ctx context.Context, id int) (models.User, error) {
+	s.umx.RLock()
+	defer s.umx.RUnlock()
+
+	v, exists := s.users[id]
 	if !exists {
 		return models.User{}, errors.New("value with such key doesn't exist")
 	}

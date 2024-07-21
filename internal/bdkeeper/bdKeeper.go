@@ -112,7 +112,7 @@ func (kp *BDKeeper) Close() bool {
 	return false
 }
 
-func (bd *BDKeeper) SaveUser(ctx context.Context, key string, user models.User) error {
+func (bd *BDKeeper) SaveUser(ctx context.Context, user models.User) (int, error) {
 
 	// Convert []byte to string
 	passwordHash := hex.EncodeToString(user.Hash)
@@ -125,9 +125,11 @@ func (bd *BDKeeper) SaveUser(ctx context.Context, key string, user models.User) 
             $1, $2, $3, $4, $5, $6, $7, $8, $9
         )
         ON CONFLICT (passportSerie, passportNumber) DO NOTHING
+        RETURNING id
     `
 
-	_, err := bd.pool.Exec(
+	var userID int
+	err := bd.pool.QueryRow(
 		ctx,
 		query,
 		user.PassportSerie,
@@ -139,14 +141,83 @@ func (bd *BDKeeper) SaveUser(ctx context.Context, key string, user models.User) 
 		user.DefaultEndTime,
 		user.Timezone,
 		passwordHash,
-	)
+	).Scan(&userID)
+
 	if err != nil {
 		bd.log.Info("error saving user to database: ", zap.Error(err))
-		return err
+		return 0, err
 	}
 
-	bd.log.Info("User saved successfully: ", zap.String("key", key))
-	return nil
+	bd.log.Info("User saved successfully: ", zap.Int("userID", userID))
+	return userID, nil
+}
+
+func (bd *BDKeeper) GetUser(ctx context.Context, passportSerie, passportNumber int) (*models.User, error) {
+	query := `
+		SELECT
+			id,
+			passportSerie,
+			passportNumber,
+			surname,
+			name,
+			patronymic,
+			address,
+			default_end_time,
+			timezone,
+			password_hash,
+			last_checked_at
+		FROM Users
+		WHERE passportSerie = $1 AND passportNumber = $2
+	`
+
+	var user models.User
+	var defaultEndTime pq.NullTime
+	var lastCheckedAt pq.NullTime
+	var hashHex *string
+
+	err := bd.pool.QueryRow(ctx, query, passportSerie, passportNumber).Scan(
+		&user.UUID,
+		&user.PassportSerie,
+		&user.PassportNumber,
+		&user.Surname,
+		&user.Name,
+		&user.Patronymic,
+		&user.Address,
+		&defaultEndTime,
+		&user.Timezone,
+		&hashHex,
+		&lastCheckedAt,
+	)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			bd.log.Info("user not found: ", zap.Int("passportSerie", passportSerie), zap.Int("passportNumber", passportNumber))
+			return nil, nil // User is not found
+		}
+		bd.log.Info("error retrieving user from database: ", zap.Error(err))
+		return nil, err // An error occurred while executing the request
+	}
+
+	// Decode the hash from hex string to bytes if the value is not NULL
+	if hashHex != nil {
+		user.Hash, err = hex.DecodeString(*hashHex)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode password hash: %w", err)
+		}
+	}
+
+	// Set DefaultEndTime field only if the value from the database is not NULL
+	if defaultEndTime.Valid {
+		user.DefaultEndTime = defaultEndTime.Time
+	}
+
+	// Set LastCheckedAt field only if the value from the database is not NULL
+	if lastCheckedAt.Valid {
+		user.LastCheckedAt = lastCheckedAt.Time
+	}
+
+	bd.log.Info("User found successfully: ", zap.Int("userID", user.UUID))
+	return &user, nil
 }
 
 func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserData) (err error) {
@@ -353,27 +424,26 @@ func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error)
 			m.LastCheckedAt = lastCheckedAt.Time
 		}
 
-		key := fmt.Sprintf("%d %d", m.PassportSerie, m.PassportNumber)
-		data[key] = m
+		data[m.UUID] = m
 	}
 
 	return data, nil
 }
 
-func (kp *BDKeeper) DeleteUser(ctx context.Context, passportSerie, passportNumber int) error {
+func (kp *BDKeeper) DeleteUser(ctx context.Context, id int) error {
 
 	query := `
         DELETE FROM Users
-        WHERE passportSerie = $1 AND passportNumber = $2
+        WHERE id = $1
     `
 
-	_, err := kp.pool.Exec(ctx, query, passportSerie, passportNumber)
+	_, err := kp.pool.Exec(ctx, query, id)
 	if err != nil {
 		kp.log.Info("error deleting user from database: ", zap.Error(err))
 		return err
 	}
 
-	kp.log.Info("User deleted successfully", zap.Int("passportSerie", passportSerie), zap.Int("passportNumber", passportNumber))
+	kp.log.Info("User deleted successfully", zap.Int("id", id))
 	return nil
 }
 

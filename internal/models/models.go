@@ -88,9 +88,9 @@ type RequestData struct {
 }
 
 type RequestDataTask struct {
-	PassportNumber string `json:"passportNumber"`
-	StartDate      string `json:"startDate"`
-	EndDate        string `json:"endDate"`
+	ID        int    `json:"id"`
+	StartDate string `json:"startDate"`
+	EndDate   string `json:"endDate"`
 }
 
 type RequestTask struct {

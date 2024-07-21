@@ -5,7 +5,7 @@
     },
     "paths": {
         "/api/task": {
-            "put": {
+            "patch": {
                 "description": "Update a task in the database",
                 "consumes": [
                     "application/json"
@@ -374,7 +374,7 @@
             }
         },
         "/api/user": {
-            "put": {
+            "patch": {
                 "description": "Update a user in the database",
                 "consumes": [
                     "application/json"
