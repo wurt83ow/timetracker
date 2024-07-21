@@ -124,11 +124,13 @@ const docTemplate = `{
                 "summary": "Delete task",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Task ID",
-                        "name": "id",
-                        "in": "query",
-                        "required": true
+                        "description": "Task Info",
+                        "name": "task",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RequestTask"
+                        }
                     }
                 ],
                 "responses": {
@@ -491,18 +493,13 @@ const docTemplate = `{
                 "summary": "Delete user",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Passport Series",
-                        "name": "passportSerie",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Passport Number",
-                        "name": "passportNumber",
-                        "in": "query",
-                        "required": true
+                        "description": "User Info",
+                        "name": "user",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RequestUser"
+                        }
                     }
                 ],
                 "responses": {
@@ -780,6 +777,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "startDate": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RequestTask": {
+            "type": "object",
+            "properties": {
+                "id": {
                     "type": "string"
                 }
             }
