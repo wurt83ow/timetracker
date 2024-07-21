@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
-	httpSwagger "github.com/swaggo/http-swagger"
 	_ "github.com/wurt83ow/timetracker/docs" // connecting generated Swagger files
 	"github.com/wurt83ow/timetracker/internal/apiservice"
 	authz "github.com/wurt83ow/timetracker/internal/authorization"
@@ -86,9 +85,6 @@ func (server *Server) Serve() {
 	r := chi.NewRouter()
 	r.Use(reqLog.RequestLogger)
 	r.Mount("/", basecontr.Route())
-
-	// Add route for Swagger UI
-	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	// configure and start the server
 	server.srv = startServer(r, option.RunAddr())

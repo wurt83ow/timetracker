@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
+	httpSwagger "github.com/swaggo/http-swagger"
 	authz "github.com/wurt83ow/timetracker/internal/authorization"
 	"github.com/wurt83ow/timetracker/internal/models"
 	"github.com/wurt83ow/timetracker/internal/storage"
@@ -86,6 +87,9 @@ func (h *BaseController) Route() *chi.Mux {
 	r.Post("/api/user/register", h.Register)
 	r.Post("/api/user/login", h.Login)
 	r.Get("/ping", h.GetPing)
+
+	// Add route for Swagger UI
+	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	// Group where the middleware authorization is needed
 	r.Group(func(r chi.Router) {
