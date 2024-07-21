@@ -115,6 +115,7 @@ API_SYSTEM_ADDRESS="localhost:8081"
 
 ```bash
 psql postgres://timetracker:example@localhost:5432/timetracker?sslmode=disable -f insert_test_data.sql
+```
 
 #### Отладка:
 
@@ -138,9 +139,4 @@ psql postgres://timetracker:example@localhost:5432/timetracker?sslmode=disable -
 - **GET /api/tasks**: Получение списка задач с фильтрацией и пагинацией.
 
 #### Лицензия
-Проект распространяется под лицензией MIT. Смотрите файл [LICENSE](./LICENSE) для получения дополнительной информации.
-
----
-
-Этот README предоставляет основную информацию для начала работы с проектом TimeTracker. Вы можете расширять и обновлять его по мере необходимости, чтобы включать дополнительные детали или инструкции.
-```
+Проект распространяется под лицензией MIT. Смотрите файл [LICENSE](./LICENSE) для получения дополнительной информации. 
