@@ -1,0 +1,387 @@
+{
+	"info": {
+		"_postman_id": "ff6170bf-d055-4882-a2a1-db7254ed2c45",
+		"name": "Swagger Collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "3566562"
+	},
+	"item": [
+		{
+			"name": "Update task",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"id\": 5,\n  \"name\": \"Updated Task1\",\n  \"description\": \"This is an updated task1\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8080/api/task",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"task"
+					]
+				},
+				"description": "Update a task in the database"
+			},
+			"response": []
+		},
+		{
+			"name": "Add task",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"\",\n  \"description\": \"This is a new task1\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8080/api/task",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"task"
+					]
+				},
+				"description": "Add a new task to the database"
+			},
+			"response": []
+		},
+		{
+			"name": "Delete task",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"id\": \"5\" \n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/api/task?taskId=1",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"task"
+					],
+					"query": [
+						{
+							"key": "taskId",
+							"value": "1"
+						}
+					]
+				},
+				"description": "Delete a task from the database"
+			},
+			"response": []
+		},
+		{
+			"name": "Start task tracking",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"TaskID\": 1\n}"
+				},
+				"url": {
+					"raw": "localhost:8080/api/task/start",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"task",
+						"start"
+					]
+				},
+				"description": "Start tracking time for a specific task"
+			},
+			"response": []
+		},
+		{
+			"name": "Stop task tracking",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"TaskID\": 1\n}"
+				},
+				"url": {
+					"raw": "localhost:8080/api/task/stop",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"task",
+						"stop"
+					]
+				},
+				"description": "Stop tracking time for a specific task"
+			},
+			"response": []
+		},
+		{
+			"name": "Get user task summary",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"PassportNumber\": \"3456 789012\",\n  \"StartDate\": \"2024-06-21T10:44:53Z\",\n  \"EndDate\": \"2024-08-21T11:05:42Z\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/api/task/summary",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"task",
+						"summary"
+					]
+				},
+				"description": "Get a summary of tasks for a user within a date range"
+			},
+			"response": []
+		},
+		{
+			"name": "Get tasks",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/api/tasks?limit=10&offset=0",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"tasks"
+					],
+					"query": [
+						{
+							"key": "limit",
+							"value": "10"
+						},
+						{
+							"key": "offset",
+							"value": "0"
+						}
+					]
+				},
+				"description": "Get tasks from the database"
+			},
+			"response": []
+		},
+		{
+			"name": "Update user",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{ \n  \"id\": 5,\n  \"surname\": \"olen\",\n  \"name\":\"ivanovich\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8080/api/user",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"user"
+					]
+				},
+				"description": "Update a user in the database"
+			},
+			"response": []
+		},
+		{
+			"name": "Add user",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"passportNumber\": \"1234 567891\" \n}"
+				},
+				"url": {
+					"raw": "localhost:8080/api/user",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"user"
+					]
+				},
+				"description": "Add a new user to the database"
+			},
+			"response": []
+		},
+		{
+			"name": "Delete user",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"passportNumber\": \"3456 789016\" \n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/api/user?userId=1",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"user"
+					],
+					"query": [
+						{
+							"key": "userId",
+							"value": "1"
+						}
+					]
+				},
+				"description": "Delete a user from the database"
+			},
+			"response": []
+		},
+		{
+			"name": "Login user",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"passportNumber\": \"1234 567890\",\n  \"password\": \"password123\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8080/api/user/login",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"user",
+						"login"
+					]
+				},
+				"description": "Login a user and return a JWT token"
+			},
+			"response": []
+		},
+		{
+			"name": "Register user",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"passportNumber\": \"1234 567890\",\n  \"password\": \"password123\"\n}"
+				},
+				"url": {
+					"raw": "localhost:8080/api/user/register",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"user",
+						"register"
+					]
+				},
+				"description": "Register a new user"
+			},
+			"response": []
+		},
+		{
+			"name": "Get users",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/api/users?limit=10&offset=0",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"users"
+					],
+					"query": [
+						{
+							"key": "limit",
+							"value": "10"
+						},
+						{
+							"key": "offset",
+							"value": "0"
+						}
+					]
+				},
+				"description": "Get users from the database"
+			},
+			"response": []
+		},
+		{
+			"name": "Check service health",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8080/ping",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"ping"
+					]
+				},
+				"description": "Check if the service is running and can connect to the database"
+			},
+			"response": []
+		}
+	]
+}
