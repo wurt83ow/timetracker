@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -374,10 +375,7 @@ func (h *BaseController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if err := h.storage.UpdateUser(h.ctx, user); err == storage.ErrNotFound {
 		h.log.Info("user not found")
 		w.WriteHeader(http.StatusNotFound)
-		return
-	} else if err != nil {
-		h.log.Info("error updating user in storage: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Println("11111111111111111111111111111111111111111111111111", err)
 		return
 	}
 
@@ -605,22 +603,16 @@ func (h *BaseController) UpdateTask(w http.ResponseWriter, r *http.Request) {
 // @Tags Tasks
 // @Accept json
 // @Produce json
-// @Param task body models.RequestTask true "Task Info"
+// @Param id path int true "Task ID"
 // @Success 200 {string} string "Task deleted successfully"
 // @Failure 400 {string} string "Bad Request"
 // @Failure 404 {string} string "Not Found"
 // @Failure 500 {string} string "Internal Server Error"
-// @Router /api/task [delete]
+// @Router /api/task/{id} [delete]
 func (h *BaseController) DeleteTask(w http.ResponseWriter, r *http.Request) {
-
-	var reqData models.RequestTask
-	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
-		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	id, err := strconv.Atoi(reqData.ID)
+	// Get the id parameter from the path
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		h.log.Info("invalid task ID format")
 		w.WriteHeader(http.StatusBadRequest)

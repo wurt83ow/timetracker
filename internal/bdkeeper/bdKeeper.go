@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -152,7 +153,7 @@ func (bd *BDKeeper) SaveUser(ctx context.Context, user models.User) (int, error)
 	return userID, nil
 }
 
-func (bd *BDKeeper) GetUser(ctx context.Context, passportSerie, passportNumber int) (*models.User, error) {
+func (bd *BDKeeper) GetUser(ctx context.Context, passportSerie, passportNumber int) (models.User, error) {
 	query := `
 		SELECT
 			id,
@@ -192,32 +193,32 @@ func (bd *BDKeeper) GetUser(ctx context.Context, passportSerie, passportNumber i
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			bd.log.Info("user not found: ", zap.Int("passportSerie", passportSerie), zap.Int("passportNumber", passportNumber))
-			return nil, nil // User is not found
+			return models.User{}, nil // User not found
 		}
 		bd.log.Info("error retrieving user from database: ", zap.Error(err))
-		return nil, err // An error occurred while executing the request
+		return models.User{}, err // An error occurred while executing the query
 	}
 
-	// Decode the hash from hex string to bytes if the value is not NULL
+	// Decoding the hash from hex string to bytes, if the value is not NULL
 	if hashHex != nil {
 		user.Hash, err = hex.DecodeString(*hashHex)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode password hash: %w", err)
+			return models.User{}, fmt.Errorf("failed to decode password hash: %w", err)
 		}
 	}
 
-	// Set DefaultEndTime field only if the value from the database is not NULL
+	// Setting the DefaultEndTime field only if the value from the database is not NULL
 	if defaultEndTime.Valid {
 		user.DefaultEndTime = defaultEndTime.Time
 	}
 
-	// Set LastCheckedAt field only if the value from the database is not NULL
+	// Setting the LastCheckedAt field only if the value from the database is not NULL
 	if lastCheckedAt.Valid {
 		user.LastCheckedAt = lastCheckedAt.Time
 	}
 
 	bd.log.Info("User found successfully: ", zap.Int("userID", user.UUID))
-	return &user, nil
+	return user, nil
 }
 
 func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserData) (err error) {
@@ -316,39 +317,71 @@ func (bd *BDKeeper) UpdateUsersInfo(ctx context.Context, users []models.ExtUserD
 }
 
 func (bd *BDKeeper) UpdateUser(ctx context.Context, user models.User) error {
+	query := "UPDATE Users SET "
+	args := []interface{}{user.UUID}
+	argCounter := 2 // Start with 2 since the 1st argument is the UUID
 
-	query := `
-        UPDATE Users SET
-            surname = $3,
-            name = $4,
-            patronymic = $5,
-            address = $6,
-            default_end_time = $7,
-            timezone = $8,            
-            password_hash = $9,
-            last_checked_at = $10
-        WHERE passportSerie = $1 AND passportNumber = $2
-    `
-	_, err := bd.pool.Exec(
-		ctx,
-		query,
-		user.PassportSerie,
-		user.PassportNumber,
-		user.Surname,
-		user.Name,
-		user.Patronymic,
-		user.Address,
-		user.DefaultEndTime,
-		user.Timezone,
-		user.Hash,
-		user.LastCheckedAt,
-	)
+	if user.PassportSerie != 0 {
+		query += "passportSerie = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.PassportSerie)
+		argCounter++
+	}
+	if user.PassportNumber != 0 {
+		query += "passportNumber = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.PassportNumber)
+		argCounter++
+	}
+	if user.Surname != "" {
+		query += "surname = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.Surname)
+		argCounter++
+	}
+	if user.Name != "" {
+		query += "name = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.Name)
+		argCounter++
+	}
+	if user.Patronymic != "" {
+		query += "patronymic = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.Patronymic)
+		argCounter++
+	}
+	if user.Address != "" {
+		query += "address = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.Address)
+		argCounter++
+	}
+	if !user.DefaultEndTime.IsZero() {
+		query += "default_end_time = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.DefaultEndTime)
+		argCounter++
+	}
+	if user.Timezone != "" {
+		query += "timezone = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.Timezone)
+		argCounter++
+	}
+	if len(user.Hash) > 0 {
+		query += "password_hash = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.Hash)
+		argCounter++
+	}
+	if !user.LastCheckedAt.IsZero() {
+		query += "last_checked_at = $" + strconv.Itoa(argCounter) + ", "
+		args = append(args, user.LastCheckedAt)
+	}
+
+	// Remove the last comma and space
+	query = query[:len(query)-2]
+	query += " WHERE id = $1"
+
+	_, err := bd.pool.Exec(ctx, query, args...)
 	if err != nil {
 		bd.log.Info("Error updating user data in the database: ", zap.Error(err))
 		return err
 	}
 
-	bd.log.Info("User data successfully updated: ", zap.Int("passportSerie", user.PassportSerie), zap.Int("passportNumber", user.PassportNumber))
+	bd.log.Info("User data successfully updated")
 	return nil
 }
 
@@ -406,7 +439,7 @@ func (kp *BDKeeper) LoadUsers(ctx context.Context) (storage.StorageUsers, error)
 			return nil, fmt.Errorf("failed to load users: %w", err)
 		}
 
-		// Декодирование хэша из шестнадцатеричной строки в байты, если значение не NULL
+		// Decoding a hash from a hex string into bytes if the value is not NULL
 		if hashHex != nil {
 			m.Hash, err = hex.DecodeString(*hashHex)
 			if err != nil {

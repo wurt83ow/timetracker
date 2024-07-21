@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -53,7 +54,7 @@ type Keeper interface {
 	StartTaskTracking(context.Context, models.TimeEntry) error
 	StopTaskTracking(context.Context, models.TimeEntry) error
 	GetUserTaskSummary(context.Context, int, time.Time, time.Time, string, time.Time) ([]models.TaskSummary, error)
-	GetUser(context.Context, int, int) (*models.User, error)
+	GetUser(context.Context, int, int) (models.User, error)
 
 	Ping(context.Context) bool
 	Close() bool
@@ -269,7 +270,6 @@ func (s *MemoryStorage) InsertTask(ctx context.Context, task models.Task) error 
 
 // UpdateTask updates an existing task in the storage
 func (s *MemoryStorage) UpdateTask(ctx context.Context, task models.Task) error {
-	// Предполагается, что метод UpdateTask у s.keeper обновляет задачу в хранилище
 	err := s.keeper.UpdateTask(ctx, task)
 	if err != nil {
 		return err
@@ -376,22 +376,29 @@ func (s *MemoryStorage) GetUser(ctx context.Context, passportSerie, passportNumb
 	s.umx.RLock()
 	defer s.umx.RUnlock()
 
-	// Попытка найти пользователя в in-memory хранилище
+	// Attempt to find the user in the in-memory storage
 	for _, user := range s.users {
 		if user.PassportSerie == passportSerie && user.PassportNumber == passportNumber {
+			fmt.Println("User found in memory storage")
 			return user, nil
 		}
 	}
 
-	// Если пользователь не найден в in-memory хранилище, поиск в базе данных
+	// If the user is not found in the in-memory storage, search in the database
 	user, err := s.keeper.GetUser(ctx, passportSerie, passportNumber)
 	if err != nil {
 		return models.User{}, err
 	}
 
-	s.users[user.UUID] = *user
+	// Check for an empty user by checking the UUID field
+	if user.UUID == 0 {
+		fmt.Println("User not found in database")
+		return models.User{}, fmt.Errorf("user not found")
+	}
 
-	return *user, nil
+	s.users[user.UUID] = user
+	fmt.Println("User found in database and added to memory storage:", user)
+	return user, nil
 }
 
 // GetUser retrieves a user from the storage by passport series and number
