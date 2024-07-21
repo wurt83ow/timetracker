@@ -13,17 +13,18 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"id\": 5,\n  \"name\": \"Updated Task1\",\n  \"description\": \"This is an updated task1\"\n}"
+					"raw": "{  \n  \"name\": \"Updated Task1\",\n  \"description\": \"This is an updated task1\"\n}"
 				},
 				"url": {
-					"raw": "localhost:8080/api/task",
+					"raw": "localhost:8080/api/task/1",
 					"host": [
 						"localhost"
 					],
 					"port": "8080",
 					"path": [
 						"api",
-						"task"
+						"task",
+						"1"
 					]
 				},
 				"description": "Update a task in the database"
@@ -37,7 +38,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"name\": \"\",\n  \"description\": \"This is a new task1\"\n}"
+					"raw": "{\n  \"name\": \"task3\",\n  \"description\": \"This is a new task3\"\n}"
 				},
 				"url": {
 					"raw": "localhost:8080/api/task",
@@ -59,30 +60,16 @@
 			"request": {
 				"method": "DELETE",
 				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"id\": \"5\" \n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
 				"url": {
-					"raw": "localhost:8080/api/task?taskId=1",
+					"raw": "localhost:8080/api/task/2",
 					"host": [
 						"localhost"
 					],
 					"port": "8080",
 					"path": [
 						"api",
-						"task"
-					],
-					"query": [
-						{
-							"key": "taskId",
-							"value": "1"
-						}
+						"task",
+						"2"
 					]
 				},
 				"description": "Delete a task from the database"
@@ -96,7 +83,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"TaskID\": 1\n}"
+					"raw": "{\n  \"TaskID\": 4\n}"
 				},
 				"url": {
 					"raw": "localhost:8080/api/task/start",
@@ -146,7 +133,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"PassportNumber\": \"3456 789012\",\n  \"StartDate\": \"2024-06-21T10:44:53Z\",\n  \"EndDate\": \"2024-08-21T11:05:42Z\"\n}",
+					"raw": "{\n  \"id\": 1,\n  \"StartDate\": \"2024-06-21T10:44:53Z\",\n  \"EndDate\": \"2024-08-21T11:05:42Z\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -207,17 +194,18 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{ \n  \"id\": 5,\n  \"surname\": \"olen\",\n  \"name\":\"ivanovich\"\n}"
+					"raw": "{    \n  \"surname\": \"Иван\",\n  \"name\":\"Иванович\"\n}"
 				},
 				"url": {
-					"raw": "localhost:8080/api/user",
+					"raw": "localhost:8080/api/user/5",
 					"host": [
 						"localhost"
 					],
 					"port": "8080",
 					"path": [
 						"api",
-						"user"
+						"user",
+						"5"
 					]
 				},
 				"description": "Update a user in the database"
@@ -231,7 +219,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"passportNumber\": \"1234 567891\" \n}"
+					"raw": "{\n  \"passportNumber\": \"1234 567897\" \n}"
 				},
 				"url": {
 					"raw": "localhost:8080/api/user",
@@ -263,20 +251,15 @@
 					}
 				},
 				"url": {
-					"raw": "localhost:8080/api/user?userId=1",
+					"raw": "localhost:8080/api/user/5",
 					"host": [
 						"localhost"
 					],
 					"port": "8080",
 					"path": [
 						"api",
-						"user"
-					],
-					"query": [
-						{
-							"key": "userId",
-							"value": "1"
-						}
+						"user",
+						"5"
 					]
 				},
 				"description": "Delete a user from the database"
