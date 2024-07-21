@@ -118,6 +118,10 @@ API_SYSTEM_ADDRESS="localhost:8081"
 psql postgres://timetracker:example@localhost:5432/timetracker?sslmode=disable -f insert_test_data.sql
 ```
 
+### Эмуляция внешнего API
+
+В корневом каталоге проекта в архиве `externalTestAPI.zip` находится наивная реализация внешнего сервиса для тестирования получения данных от внешнего API.
+
 #### Отладка:
 
 Для отладки можно использовать файл `postman_collection.json`, который находится в корне проекта. Импортируйте этот файл в Postman, чтобы использовать готовые запросы для тестирования API.
