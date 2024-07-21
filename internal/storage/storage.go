@@ -72,7 +72,7 @@ func NewMemoryStorage(ctx context.Context, keeper Keeper, log Log) *MemoryStorag
 		if err != nil {
 			log.Info("cannot load user data: ", zap.Error(err))
 		}
-		fmt.Println("33333333333333333333333333333333333333333333333333333", users, err)
+
 		// Load tasks
 		tasks, err = keeper.LoadTasks(ctx)
 		if err != nil {

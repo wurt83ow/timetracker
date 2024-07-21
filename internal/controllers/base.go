@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -232,19 +231,17 @@ func (h *BaseController) Login(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	fmt.Println("8888888888888888888888888888888888888888", passportSerie, passportNumber)
+
 	user, err := h.storage.GetUser(h.ctx, passportSerie, passportNumber)
 
 	if err != nil {
 		// incorrect login/password pair
 		w.WriteHeader(http.StatusUnauthorized) //code 401
 		h.log.Info("incorrect login/password pair, request status 401: ", metod)
-		fmt.Println("7777777777777777777777777777777777777777", err)
+
 		return
 	}
 
-	fmt.Println("9999999999999999999999999999999999999999999999999999999999", user.Hash)
-	fmt.Println("9999999999999999999999999999999999999999999999999999999999", h.authz.GetHash(rb.PassportNumber, rb.Password))
 	if !bytes.Equal(user.Hash, h.authz.GetHash(rb.PassportNumber, rb.Password)) {
 		// incorrect login/password pair
 		w.WriteHeader(http.StatusUnauthorized) //code 401
@@ -536,13 +533,12 @@ func (h *BaseController) AddTask(w http.ResponseWriter, r *http.Request) {
 func (h *BaseController) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	var task models.Task
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
-		fmt.Println("333333333333333333333333333333333333333333333", err)
+
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	fmt.Println("777777777777777777777777777777777777777777777", task.ID)
-	fmt.Println("2222222222222222222222222222222222222222222222", task)
+
 	if err := h.storage.UpdateTask(h.ctx, task); err == storage.ErrNotFound {
 		h.log.Info("task not found")
 		w.WriteHeader(http.StatusNotFound)
@@ -551,7 +547,7 @@ func (h *BaseController) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		h.log.Info("error updating task in storage: ", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Println("2222222222222222222222222222222222222222222222", err)
+
 		return
 	}
 
