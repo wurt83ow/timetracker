@@ -550,7 +550,7 @@ func (bd *BDKeeper) UpdateTask(ctx context.Context, task models.Task) error {
 
 // StartTaskTracking starts tracking time for a task
 func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntry) error {
-	
+
 	// Convert time taking into account the user's time zone
 	location, err := time.LoadLocation(entry.UserTimezone)
 	if err != nil {
@@ -616,7 +616,7 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
 		bd.log.Info("error saving task tracking to database: ", zap.String("errorType", errType.String()), zap.Error(err))
 		return err
 	}
-	
+
 	bd.log.Info("Task tracking started successfully for user: ", zap.Int("userID", entry.UserID), zap.Int("taskID", entry.TaskID))
 	return nil
 }
@@ -718,15 +718,27 @@ func (bd *BDKeeper) GetUserTaskSummary(ctx context.Context, userID int, startDat
 	taskTimeMap := make(map[int]time.Duration)
 	for rows.Next() {
 		var taskID int
-		var startTime, endTime time.Time
-		err = rows.Scan(&taskID, &startTime, &endTime)
+		var startTimeStr, endTimeStr string
+		err = rows.Scan(&taskID, &startTimeStr, &endTimeStr)
 		if err != nil {
 			bd.log.Info("error scanning task summary: ", zap.Error(err))
 			return nil, err
 		}
 
-		// If end_time is not filled, use default_end_time or the end of the current day
-		if endTime.IsZero() {
+		startTime, err := time.Parse("15:04:05.999999-07", startTimeStr)
+		if err != nil {
+			bd.log.Info("error parsing start time: ", zap.Error(err))
+			return nil, err
+		}
+
+		var endTime time.Time
+		if endTimeStr != "" {
+			endTime, err = time.Parse("15:04:05.999999-07", endTimeStr)
+			if err != nil {
+				bd.log.Info("error parsing end time: ", zap.Error(err))
+				return nil, err
+			}
+		} else {
 			if !defaultEndTime.IsZero() {
 				endTime = defaultEndTime
 			} else {
@@ -742,7 +754,7 @@ func (bd *BDKeeper) GetUserTaskSummary(ctx context.Context, userID int, startDat
 	for taskID, totalTime := range taskTimeMap {
 		taskSummaries = append(taskSummaries, models.TaskSummary{
 			TaskID:    taskID,
-			TotalTime: time.Duration.String(totalTime),
+			TotalTime: totalTime.String(),
 		})
 	}
 
