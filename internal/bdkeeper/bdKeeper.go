@@ -2,10 +2,10 @@ package bdkeeper
 
 import (
 	"context"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"os"
+	"reflect"
 	"sort"
 	"time"
 
@@ -548,7 +548,9 @@ func (bd *BDKeeper) UpdateTask(ctx context.Context, task models.Task) error {
 	return nil
 }
 
+// StartTaskTracking starts tracking time for a task
 func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntry) error {
+	
 	// Convert time taking into account the user's time zone
 	location, err := time.LoadLocation(entry.UserTimezone)
 	if err != nil {
@@ -564,12 +566,13 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
 	}
 
 	defer func() {
-		if err != nil {
-			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-				bd.log.Info("Error during transaction rollback: ", zap.Error(rollbackErr))
-			} else {
-				bd.log.Info("Transaction rolled back: ", zap.Error(err))
-			}
+		if p := recover(); p != nil {
+			_ = tx.Rollback(ctx)
+			bd.log.Info("Transaction rolled back due to panic: ", zap.Any("panic", p))
+			panic(p) // re-throw panic after Rollback
+		} else if err != nil {
+			_ = tx.Rollback(ctx)
+			bd.log.Info("Transaction rolled back: ", zap.Error(err))
 		} else {
 			err = tx.Commit(ctx)
 			if err != nil {
@@ -587,9 +590,15 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
         WHERE user_id = $1 AND task_id = $2 AND event_date = $3 AND end_time IS NULL
     `
 	err = tx.QueryRow(ctx, query, entry.UserID, entry.TaskID, entry.EventDate).Scan(&existingTaskID)
-	if err != nil && err != sql.ErrNoRows {
-		bd.log.Info("error checking existing task in database: ", zap.Error(err))
-		return err
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			// No active entry found, reset the error
+			err = nil
+		} else {
+			errType := reflect.TypeOf(err)
+			bd.log.Info("error checking existing task in database: ", zap.String("errorType", errType.String()), zap.Error(err))
+			return err
+		}
 	}
 
 	if existingTaskID != 0 {
@@ -603,10 +612,11 @@ func (bd *BDKeeper) StartTaskTracking(ctx context.Context, entry models.TimeEntr
     `
 	_, err = tx.Exec(ctx, insertQuery, entry.UserID, entry.TaskID, entry.EventDate, startTime)
 	if err != nil {
-		bd.log.Info("error saving task tracking to database: ", zap.Error(err))
+		errType := reflect.TypeOf(err)
+		bd.log.Info("error saving task tracking to database: ", zap.String("errorType", errType.String()), zap.Error(err))
 		return err
 	}
-
+	
 	bd.log.Info("Task tracking started successfully for user: ", zap.Int("userID", entry.UserID), zap.Int("taskID", entry.TaskID))
 	return nil
 }

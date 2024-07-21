@@ -85,7 +85,7 @@ func (h *BaseController) Route() *chi.Mux {
 	r.Post("/api/user/login", h.Login)
 	r.Get("/ping", h.GetPing)
 
-	// group where the middleware authorization is needed
+	// Group where the middleware authorization is needed
 	r.Group(func(r chi.Router) {
 		r.Use(h.authz.JWTAuthzMiddleware(h.log))
 
@@ -290,6 +290,16 @@ func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check that passport series and number are not zero
+	if passportSerie == 0 || passportNumber == 0 {
+		h.log.Info("passport series or number is zero")
+		w.WriteHeader(http.StatusBadRequest)
+		if _, err := w.Write([]byte("Passport series and number cannot be zero")); err != nil {
+			h.log.Info("error writing response: ", zap.Error(err))
+		}
+		return
+	}
+
 	// Fill the timezone field with a default value if it was not passed
 	loc, err := time.LoadLocation("Local")
 	if err != nil {
@@ -302,7 +312,7 @@ func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 	defaultEndTime, err := h.parseDefaultEndTime(loc)
 	if err != nil {
 		h.log.Info("cannot parse default end time: ", zap.Error(err))
-		w.WriteHeader(http.StatusInternalServerError) // code 500
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -321,6 +331,9 @@ func (h *BaseController) AddUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte("User added successfully")); err != nil {
+		h.log.Info("error writing response: ", zap.Error(err))
+	}
 	h.log.Info("User added successfully")
 }
 
@@ -507,6 +520,16 @@ func (h *BaseController) AddTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check that the task name is not empty
+	if task.Name == "" {
+		h.log.Info("task name is empty")
+		w.WriteHeader(http.StatusBadRequest)
+		if _, err := w.Write([]byte("Task name cannot be empty")); err != nil {
+			h.log.Info("error writing response: ", zap.Error(err))
+		}
+		return
+	}
+
 	task.CreatedAt = time.Now()
 
 	if err := h.storage.InsertTask(h.ctx, task); err != nil {
@@ -516,6 +539,9 @@ func (h *BaseController) AddTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte("Task added successfully")); err != nil {
+		h.log.Info("error writing response: ", zap.Error(err))
+	}
 	h.log.Info("Task added successfully")
 }
 
@@ -665,7 +691,6 @@ func (h *BaseController) GetTasks(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal Server Error"
 // @Router /api/task/start [post]
 func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Request) {
-
 	var reqData models.RequestData
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		h.log.Info("cannot decode request JSON body: ", zap.Error(err))
@@ -673,29 +698,22 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Split passport series and number
-	parts := strings.Split(reqData.PassportNumber, " ")
-	if len(parts) != 2 {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
+	// Retrieve userID from context
+	userID, ok := r.Context().Value(models.Key("userID")).(string)
+	if !ok || userID == "" {
+		h.log.Info("userID not found in context")
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
-	passportSerie, err := strconv.Atoi(parts[0])
+	// Find user by userID (passport series and number) in cache
+	passportSerie, passportNumber, err := h.parsePassportData(userID)
 	if err != nil {
-		h.log.Info("invalid passport series format")
+		h.log.Info("error parsing passport data", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	passportNumber, err := strconv.Atoi(parts[1])
-	if err != nil {
-		h.log.Info("invalid passport number format")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Find user by passport series and number in cache
 	filter := models.Filter{
 		PassportSerie:  &passportSerie,
 		PassportNumber: &passportNumber,
@@ -730,10 +748,14 @@ func (h *BaseController) StartTaskTracking(w http.ResponseWriter, r *http.Reques
 	if err := h.storage.StartTaskTracking(h.ctx, entry); err != nil {
 		h.log.Info("error starting task tracking", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte("Task tracking started successfully")); err != nil {
+		h.log.Info("error writing response: ", zap.Error(err))
+	}
 	h.log.Info("Task tracking started successfully")
 }
 
