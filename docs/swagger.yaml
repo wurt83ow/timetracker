@@ -10,8 +10,8 @@ definitions:
     properties:
       endDate:
         type: string
-      passportNumber:
-        type: string
+      id:
+        type: integer
       startDate:
         type: string
     type: object
@@ -138,11 +138,17 @@ paths:
       summary: Add task
       tags:
       - Tasks
+  /api/task/{id}:
     patch:
       consumes:
       - application/json
-      description: Update a task in the database
+      description: Update a task in the database by ID
       parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: integer
       - description: Task Info
         in: body
         name: task
@@ -318,39 +324,6 @@ paths:
       tags:
       - Tasks
   /api/user:
-    delete:
-      consumes:
-      - application/json
-      description: Delete a user from the database
-      parameters:
-      - description: User Info
-        in: body
-        name: user
-        required: true
-        schema:
-          $ref: '#/definitions/models.RequestUser'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: User deleted successfully
-          schema:
-            type: string
-        "400":
-          description: Bad Request
-          schema:
-            type: string
-        "404":
-          description: Not Found
-          schema:
-            type: string
-        "500":
-          description: Internal Server Error
-          schema:
-            type: string
-      summary: Delete user
-      tags:
-      - User
     post:
       consumes:
       - application/json
@@ -380,11 +353,49 @@ paths:
       summary: Add user
       tags:
       - User
+  /api/user/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a user from the database by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User deleted successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Delete user
+      tags:
+      - User
     patch:
       consumes:
       - application/json
-      description: Update a user in the database
+      description: Update a user in the database by ID
       parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
       - description: User Info
         in: body
         name: user
